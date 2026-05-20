@@ -23,7 +23,7 @@ echo ""
 log "Atualizando sistema..."
 apt-get update -qq
 
-log "Instalando ferramentas de segurança..."
+log "Instalando ferramentas de segurança e dependências de sistema..."
 apt-get install -y -qq \
     nmap \
     nikto \
@@ -33,6 +33,10 @@ apt-get install -y -qq \
     wordlists \
     python3-pip \
     python3-venv \
+    python3-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libfreetype6-dev \
     git \
     fonts-dejavu
 
