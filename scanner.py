@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pi Recon - Ferramenta de reconhecimento com análise via Gemini AI
+Pi Recon - Ferramenta de reconhecimento com análise via Antigravity 2.0
 Uso: python3 scanner.py
 
 Dependências:
@@ -27,11 +27,10 @@ except ImportError:
     sys.exit(1)
 
 # ── Configuração ──────────────────────────────────────────────────────────────
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "SUA_CHAVE_AQUI")
+ANTIGRAVITY_API_KEY = os.environ.get("GEMINI_API_KEY", "SUA_CHAVE_AQUI")
 
-# gemini-2.5-flash-lite: gratuito, 15 RPM, 1.000 req/dia (maio 2026)
-# Troque para "gemini-2.5-flash" se quiser mais capacidade (10 RPM, 250 req/dia)
-GEMINI_MODEL = "gemini-2.5-flash-lite"
+# gemini-3.5-flash: Padrão Antigravity 2.0 (maio 2026)
+ANTIGRAVITY_MODEL = "gemini-3.5-flash"
 
 LOG_DIR = Path("./logs")
 LOG_DIR.mkdir(exist_ok=True)
@@ -54,19 +53,19 @@ class C:
     DIM    = "\033[2m"
     RESET  = "\033[0m"
 
-# ── Gemini (novo SDK) ─────────────────────────────────────────────────────────
-def init_gemini() -> genai.Client:
-    """Inicializa cliente Gemini com o novo SDK google-genai."""
-    return genai.Client(api_key=GEMINI_API_KEY)
+# ── Antigravity Engine (Gemini SDK) ───────────────────────────────────────────
+def init_antigravity() -> genai.Client:
+    """Inicializa cliente Antigravity com o SDK google-genai."""
+    return genai.Client(api_key=ANTIGRAVITY_API_KEY)
 
-def analyze_with_gemini(client: genai.Client, tool_name: str, target: str, raw_output: str) -> str:
-    """Envia saída da ferramenta para o Gemini e retorna análise em português."""
+def analyze_with_antigravity(client: genai.Client, tool_name: str, target: str, raw_output: str) -> str:
+    """Envia saída da ferramenta para o Antigravity e retorna análise em português."""
     prompt = f"""Você é um especialista em cibersegurança analisando resultados de pentest autorizado.
 Ferramenta usada: {tool_name}
 Alvo: {target}
 
 --- OUTPUT DA FERRAMENTA ---
-{raw_output[:6000]}
+{raw_output[:8000]}
 --- FIM DO OUTPUT ---
 
 Responda SOMENTE em português, de forma concisa e técnica, seguindo exatamente este formato:
@@ -86,16 +85,16 @@ Seja direto e técnico. Sem introduções, sem repetir o output."""
 
     try:
         response = client.models.generate_content(
-            model=GEMINI_MODEL,
+            model=ANTIGRAVITY_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.2,       # mais determinístico para análise técnica
+                temperature=0.1,       # Ainda mais determinístico para Antigravity 2.0
                 max_output_tokens=1024,
             ),
         )
         return response.text
     except Exception as e:
-        return f"[Erro Gemini] {type(e).__name__}: {e}"
+        return f"[Erro Antigravity] {type(e).__name__}: {e}"
 
 # ── Executor de comandos ──────────────────────────────────────────────────────
 def run_tool(cmd: list, timeout: int = 300) -> tuple:
@@ -187,12 +186,12 @@ def save_log(target: str, tool: str, raw: str, analysis: str) -> Path:
     safe  = target.replace("/", "_").replace(":", "-").replace(" ", "_")
     fname = LOG_DIR / f"{ts}_{tool}_{safe}.json"
     data  = {
-        "timestamp":       ts,
-        "target":          target,
-        "tool":            tool,
-        "model":           GEMINI_MODEL,
-        "raw_output":      raw,
-        "gemini_analysis": analysis,
+        "timestamp":            ts,
+        "target":               target,
+        "tool":                 tool,
+        "antigravity_model":    ANTIGRAVITY_MODEL,
+        "raw_output":           raw,
+        "antigravity_analysis": analysis,
     }
     with open(fname, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -223,13 +222,13 @@ def print_banner():
  ██╔═══╝ ██║    ██╔══██╗██╔══╝  ██║     ██║   ██║██║╚██╗██║
  ██║     ██║    ██║  ██║███████╗╚██████╗╚██████╔╝██║ ╚████║
  ╚═╝     ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝{C.RESET}
-{C.CYAN}         Raspberry Pi Recon Tool  ·  Powered by Gemini AI{C.RESET}
-{C.DIM}         Modelo: {GEMINI_MODEL}  ·  Logs: {LOG_DIR.resolve()}{C.RESET}
+{C.CYAN}      Raspberry Pi Recon Tool  ·  Powered by Antigravity 2.0{C.RESET}
+{C.DIM}         Modelo: {ANTIGRAVITY_MODEL}  ·  Logs: {LOG_DIR.resolve()}{C.RESET}
 """)
 
 def print_menu():
     print(f"{C.BOLD}{'─'*52}{C.RESET}")
-    print(f"{C.BOLD} FERRAMENTAS{C.RESET}")
+    print(f"{C.BOLD} FERRAMENTAS (ANTIGRAVITY READY){C.RESET}")
     print(f"{'─'*52}")
     descs = {
         "1": "nmap      — port scan e detecção de serviços",
@@ -250,7 +249,7 @@ def print_raw(output: str):
     print(f"{C.BOLD}{'─'*52}{C.RESET}")
 
 def print_analysis(analysis: str):
-    print(f"\n{C.BOLD}{C.GREEN}── ANÁLISE GEMINI ({GEMINI_MODEL}) {'─'*18}{C.RESET}")
+    print(f"\n{C.BOLD}{C.GREEN}── ANÁLISE ANTIGRAVITY ({ANTIGRAVITY_MODEL}) {'─'*14}{C.RESET}")
     # Destaca a linha de risco
     for line in analysis.splitlines():
         if "RISCO GERAL" in line.upper():
@@ -272,7 +271,7 @@ def main():
     print_banner()
 
     # Valida API key
-    if GEMINI_API_KEY == "SUA_CHAVE_AQUI":
+    if ANTIGRAVITY_API_KEY == "SUA_CHAVE_AQUI":
         print(f"{C.RED}[ERRO] API Key não configurada.{C.RESET}")
         print(f"       1. Obtenha sua chave em: https://aistudio.google.com/app/apikey")
         print(f"       2. Execute: export GEMINI_API_KEY='sua_chave'")
@@ -280,18 +279,18 @@ def main():
         sys.exit(1)
 
     # Inicializa cliente
-    print(f"{C.YELLOW}[*] Conectando ao Gemini ({GEMINI_MODEL})...{C.RESET}")
+    print(f"{C.YELLOW}[*] Conectando ao Antigravity ({ANTIGRAVITY_MODEL})...{C.RESET}")
     try:
-        client = init_gemini()
+        client = init_antigravity()
         # Teste rápido de conectividade
         client.models.generate_content(
-            model=GEMINI_MODEL,
+            model=ANTIGRAVITY_MODEL,
             contents="ok",
             config=types.GenerateContentConfig(max_output_tokens=5),
         )
-        print(f"{C.GREEN}[+] Gemini conectado e funcionando.{C.RESET}")
+        print(f"{C.GREEN}[+] Antigravity conectado e pronto.{C.RESET}")
     except Exception as e:
-        print(f"{C.RED}[ERRO] Falha ao conectar ao Gemini: {e}{C.RESET}")
+        print(f"{C.RED}[ERRO] Falha ao conectar ao Antigravity: {e}{C.RESET}")
         print(f"       Verifique sua API key e conexão com a internet.")
         sys.exit(1)
 
@@ -336,10 +335,10 @@ def main():
         # ── Mostra output bruto ───────────────────────────────────────────────
         print_raw(raw_output)
 
-        # ── Análise com Gemini ────────────────────────────────────────────────
-        print(f"\n{C.YELLOW}[*] Enviando para Gemini AI...{C.RESET}")
+        # ── Análise com Antigravity ───────────────────────────────────────────
+        print(f"\n{C.YELLOW}[*] Enviando para Antigravity AI...{C.RESET}")
         try:
-            analysis = analyze_with_gemini(client, tool_name, target, raw_output)
+            analysis = analyze_with_antigravity(client, tool_name, target, raw_output)
         except KeyboardInterrupt:
             print(f"\n{C.YELLOW}[!] Análise cancelada.{C.RESET}")
             analysis = "[Análise cancelada pelo usuário]"

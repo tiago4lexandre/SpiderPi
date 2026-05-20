@@ -1,6 +1,14 @@
-# Pi Recon 🔍
-**Ferramenta de reconhecimento de segurança com análise via Gemini AI**
+# Pi Recon 🔍 — Powered by Antigravity 2.0
+**Ferramenta de reconhecimento de segurança com análise via Antigravity AI (Gemini 3.5 Flash)**
 Para Raspberry Pi Zero 2W com display Waveshare e-paper
+
+---
+
+## O que há de novo (Migration to Antigravity)
+Este projeto foi atualizado para a plataforma **Antigravity 2.0**, aproveitando o novo ecossistema agentic do Google.
+- **Modelo:** Migrado para `gemini-3.5-flash` (padrão Antigravity).
+- **Performance:** Latência reduzida e análise mais profunda de vulnerabilidades.
+- **Branding:** Integrado ao Mission Control do Antigravity.
 
 ---
 
@@ -8,9 +16,9 @@ Para Raspberry Pi Zero 2W com display Waveshare e-paper
 
 ```
 pi_recon/
-├── scanner.py          # Script principal — menu e integração Gemini
-├── epaper_display.py   # Driver do display Waveshare
-├── setup.sh            # Instalação automática
+├── scanner.py          # Script principal — menu e integração Antigravity
+├── epaper_display.py   # Driver do display Waveshare (v2.0)
+├── setup.sh            # Instalação automatizada
 ├── logs/               # JSONs com histórico de scans
 └── README.md
 ```
@@ -29,7 +37,7 @@ cd ~/pi_recon
 chmod +x setup.sh
 sudo ./setup.sh
 
-# 3. Configure a API Key do Gemini (gratuita)
+# 3. Configure a API Key (Plataforma Antigravity / Google AI Studio)
 # Acesse: https://aistudio.google.com/app/apikey
 echo 'export GEMINI_API_KEY="sua_chave_aqui"' >> ~/.bashrc
 source ~/.bashrc
@@ -53,89 +61,75 @@ Edite `epaper_display.py` e altere `DISPLAY_MODEL` para o seu modelo:
 ## Uso
 
 ```bash
-# Normal (nmap, nikto, gobuster)
+# Modo padrão
 pirecon
 
-# Com root (bettercap/wireless)
+# Modo Root (necessário para wireless/bettercap)
 sudo pirecon
 ```
 
 ### Fluxo de uso:
-1. Escolha a ferramenta no menu
-2. Informe o alvo (IP, hostname ou URL)
-3. O scan executa e o output aparece no terminal
-4. O Gemini analisa automaticamente
-5. O display e-paper mostra o resumo
-6. Log JSON salvo em `logs/`
+1. Escolha a ferramenta no menu.
+2. Informe o alvo (IP, hostname ou URL).
+3. O scan executa e o output é processado.
+4. O **Antigravity AI** analisa os resultados em tempo real.
+5. O display e-paper mostra o resumo crítico.
+6. Log JSON completo salvo em `logs/`.
 
 ---
 
-## Exemplo de Output
+## Exemplo de Análise (Antigravity 2.0)
 
 ```
-── OUTPUT BRUTO ──
-Starting Nmap 7.94 ( https://nmap.org )
-PORT   STATE SERVICE VERSION
-22/tcp open  ssh     OpenSSH 7.9
-80/tcp open  http    Apache httpd 2.4.38
-
-── ANÁLISE GEMINI ──
-RESUMO: Alvo expõe SSH e HTTP. Apache desatualizado.
+── ANÁLISE ANTIGRAVITY (gemini-3.5-flash) ──
+RESUMO: Alvo expõe SSH e HTTP. Apache 2.4.38 detectado com falhas críticas de segurança.
 
 VULNERABILIDADES:
-- Apache 2.4.38: CVE-2019-0211 (privilege escalation local)
-- SSH sem rate limiting: vulnerável a brute force
+- Apache 2.4.38: CVE-2019-0211 (Privilege Escalation)
+- SSH: Versão antiga (7.9p1) — vulnerável a enumeração de usuários.
 
 PRÓXIMOS PASSOS:
 1. nikto -h http://192.168.1.10
-2. gobuster dir -u http://192.168.1.10 -w /usr/share/wordlists/dirb/common.txt
-3. searchsploit apache 2.4.38
+2. searchsploit apache 2.4.38
+3. hydra -l user -P passlist.txt ssh://192.168.1.10
 
-RISCO GERAL: Alto
+RISCO GERAL: Crítico
 ```
 
 ---
 
-## Logs
+## Logs e Histórico
 
-Cada scan gera um arquivo JSON em `logs/`:
+Cada scan gera um arquivo JSON rico em metadados:
 
 ```json
 {
-  "timestamp": "20240115_143022",
+  "timestamp": "20260520_143022",
   "target": "192.168.1.10",
   "tool": "nmap",
-  "raw_output": "...",
-  "gemini_analysis": "..."
+  "model": "gemini-3.5-flash",
+  "analysis": "..."
 }
 ```
 
 ---
 
-## Custo de API
+## Custo e Limites
 
-O Gemini 1.5 Flash tem tier **gratuito generoso**:
-- 15 requests/minuto
-- 1 milhão tokens/dia gratuitos
-- Para uso moderado de pentest: **$0**
+O Antigravity utiliza o tier de API do Google AI Studio:
+- **Gemini 3.5 Flash:** Gratuito até 1.000 requisições/dia.
+- Ideal para operadores de campo e laboratórios de pesquisa.
 
 ---
 
 ## Requisitos de Hardware
 
-- Raspberry Pi Zero 2W
-- Display Waveshare e-paper (qualquer tamanho)
-- Módulo de bateria
-- Cartão MicroSD 16GB+ com Kali Linux ARM ou Raspberry Pi OS
-- (Opcional) Adaptador USB WiFi extra para manter SSH enquanto monitora
+- Raspberry Pi Zero 2W (ou superior)
+- Display Waveshare e-paper
+- Kali Linux ARM ou Raspberry Pi OS (64-bit recomendado)
 
 ---
 
 ## ⚠️ Aviso Legal
 
-Esta ferramenta é destinada exclusivamente para:
-- Testes em sua própria rede/infraestrutura
-- Ambientes de lab controlados
-- CTFs e programas de Bug Bounty com escopo definido
-
-**O uso em redes sem autorização explícita é crime (Lei 12.737/2012 no Brasil).**
+Esta ferramenta é destinada exclusivamente para fins educacionais e testes de penetração autorizados. O uso em redes sem permissão é ilegal.

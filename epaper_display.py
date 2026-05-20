@@ -150,7 +150,7 @@ def show_boot_screen():
 
         draw.rectangle([0, 0, H, W], fill=0)
         draw.text((10, 20), "PI RECON", font=font_big, fill=255)
-        draw.text((10, 42), "Powered by Gemini AI", font=font_small, fill=255)
+        draw.text((10, 42), "Powered by Antigravity 2.0", font=font_small, fill=255)
         draw.text((10, 54), datetime.now().strftime("%d/%m/%Y %H:%M"), font=font_small, fill=255)
         draw.text((10, 68), "SSH pronto. Aguardando...", font=font_small, fill=255)
 
