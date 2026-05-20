@@ -37,7 +37,7 @@ Após a gravação, **não remova o cartão ainda**. Se o sistema ejetar o cart�
 2. Crie um arquivo vazio chamado apenas `ssh` (sem extensão e sem conteúdo). 
    *No Windows: Botão direito > Novo > Documento de Texto. Renomeie para "ssh" e apague o ".txt".*
 
-### B. Configurar Wi-Fi
+### B. Configurar Wi-Fi (Opcional se usar USB Gadget)
 1. Na mesma partição `boot`, crie um arquivo chamado `wpa_supplicant.conf`.
 2. Abra o arquivo com um editor de texto (Notepad, VS Code, etc) e cole o seguinte conteúdo, substituindo pelos seus dados:
 
@@ -53,22 +53,49 @@ network={
 }
 ```
 
-3. Salve o arquivo e ejete o cartão com segurança.
+### C. Configurar modo USB Ethernet Gadget (Acesso via Cabo USB)
+Se você não tem Wi-Fi ou prefere conectar o Pi diretamente ao seu computador via USB:
 
-## 5. Primeiro Acesso via SSH
+1. Na partição `boot`, abra o arquivo `config.txt`.
+2. Vá até o final do arquivo e adicione a seguinte linha em uma nova linha:
+   ```text
+   dtoverlay=dwc2
+   ```
+3. Agora, abra o arquivo `cmdline.txt`.
+   - **Atenção:** Este arquivo possui apenas UMA linha. Não crie linhas novas.
+   - Procure por `rootwait` e insira logo após ele (com um espaço): `modules-load=dwc2,g_ether`
+   - Deve ficar algo como: `... rootwait modules-load=dwc2,g_ether quiet ...`
+4. Salve os arquivos e ejete o cartão.
 
+---
 
-1. Aguarde cerca de 2 a 3 minutos para o primeiro boot (o sistema expande as partições automaticamente).
-2. No seu computador, abra o terminal e tente conectar:
+## 5. Primeiro Acesso e Conexão
+
+### Conexão Física
+- **Via Wi-Fi:** Conecte o cabo de energia na porta **PWR**.
+- **Via USB Gadget:** Conecte o cabo USB na porta **USB** (a porta do meio, não a da ponta). Esta porta fornecerá energia e dados.
+
+### Acessando via Windows
+1. Ao conectar via USB, o Windows pode reconhecer o Pi como uma porta serial ou dispositivo desconhecido.
+2. Abra o **Gerenciador de Dispositivos**. Se aparecer "RNDIS" com um erro, você precisará instalar o driver "USB Ethernet/RNDIS Gadget" (disponível via Windows Update ou manualmente).
+3. Uma vez reconhecido, o Pi terá o endereço IP padrão `169.254.x.x` (Auto-IP).
+4. Use o terminal (PowerShell/CMD) para conectar:
    ```bash
    ssh kali@pirecon.local
    ```
-   *Se o hostname não funcionar, você precisará identificar o IP do Pi através do seu roteador ou ferramentas como `nmap` ou `arp-scan`.*
 
-3. Quando perguntado sobre a "ECDSA key fingerprint", digite `yes`.
-4. Digite a senha (padrão: `kali`).
+### Acessando via Linux
+1. Ao conectar o USB, o Linux geralmente reconhece a interface de rede automaticamente (ex: `usb0`).
+2. Vá nas configurações de rede do seu sistema, encontre a nova conexão com fio e altere o método IPv4 para **"Shared to other computers"** (Compartilhado com outros computadores) ou garanta que ele obtenha um IP via Link-Local.
+3. Conecte via terminal:
+   ```bash
+   ssh kali@pirecon.local
+   ```
+   *(Ou use `ssh kali@169.254.x.x` se souber o IP).*
 
-## 5. Pós-instalação e Atualização
+---
+
+## 6. Pós-instalação e Atualização
 
 Uma vez dentro do sistema, é crucial atualizar os repositórios e o sistema base:
 
