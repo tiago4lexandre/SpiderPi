@@ -49,7 +49,7 @@ python3 -m venv /opt/pi_recon_env
 log "Instalando dependências Python..."
 /opt/pi_recon_env/bin/pip install --upgrade pip -q
 /opt/pi_recon_env/bin/pip install \
-    google-generativeai \
+    google-genai \
     Pillow \
     RPi.GPIO \
     spidev -q

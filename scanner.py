@@ -2,27 +2,38 @@
 """
 Pi Recon - Ferramenta de reconhecimento com análise via Gemini AI
 Uso: python3 scanner.py
+
+Dependências:
+    pip install google-genai
+
+API Key gratuita (1.000 req/dia):
+    https://aistudio.google.com/app/apikey
 """
 
 import subprocess
 import json
 import os
 import sys
-import time
 import datetime
-import textwrap
 from pathlib import Path
 
+# ── Importa novo SDK oficial (google-genai, GA desde maio 2025) ───────────────
 try:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 except ImportError:
-    print("[ERRO] Instale: pip install google-generativeai")
+    print("[ERRO] SDK não encontrado. Execute:")
+    print("       pip install google-genai")
     sys.exit(1)
 
 # ── Configuração ──────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "SUA_CHAVE_AQUI")
-GEMINI_MODEL   = "gemini-1.5-flash"   # gratuito e rápido
-LOG_DIR        = Path("./logs")
+
+# gemini-2.5-flash-lite: gratuito, 15 RPM, 1.000 req/dia (maio 2026)
+# Troque para "gemini-2.5-flash" se quiser mais capacidade (10 RPM, 250 req/dia)
+GEMINI_MODEL = "gemini-2.5-flash-lite"
+
+LOG_DIR = Path("./logs")
 LOG_DIR.mkdir(exist_ok=True)
 
 # Tenta importar suporte ao e-paper (não falha se não tiver)
@@ -40,124 +51,155 @@ class C:
     YELLOW = "\033[93m"
     CYAN   = "\033[96m"
     BOLD   = "\033[1m"
+    DIM    = "\033[2m"
     RESET  = "\033[0m"
 
-# ── Gemini ────────────────────────────────────────────────────────────────────
-def init_gemini():
-    genai.configure(api_key=GEMINI_API_KEY)
-    return genai.GenerativeModel(GEMINI_MODEL)
+# ── Gemini (novo SDK) ─────────────────────────────────────────────────────────
+def init_gemini() -> genai.Client:
+    """Inicializa cliente Gemini com o novo SDK google-genai."""
+    return genai.Client(api_key=GEMINI_API_KEY)
 
-def analyze_with_gemini(model, tool_name: str, target: str, raw_output: str) -> str:
-    """Envia saída da ferramenta para o Gemini e retorna análise."""
-    prompt = f"""Você é um especialista em cibersegurança analisando resultados de pentest.
-Ferramenta: {tool_name}
+def analyze_with_gemini(client: genai.Client, tool_name: str, target: str, raw_output: str) -> str:
+    """Envia saída da ferramenta para o Gemini e retorna análise em português."""
+    prompt = f"""Você é um especialista em cibersegurança analisando resultados de pentest autorizado.
+Ferramenta usada: {tool_name}
 Alvo: {target}
 
---- OUTPUT ---
+--- OUTPUT DA FERRAMENTA ---
 {raw_output[:6000]}
---- FIM ---
+--- FIM DO OUTPUT ---
 
-Responda SOMENTE em português, de forma concisa e técnica:
-1. RESUMO (2 linhas): o que foi encontrado
-2. VULNERABILIDADES: liste as mais críticas (se houver)
-3. PRÓXIMOS PASSOS: 2-3 comandos concretos a executar
-4. RISCO GERAL: Baixo / Médio / Alto / Crítico
+Responda SOMENTE em português, de forma concisa e técnica, seguindo exatamente este formato:
 
-Seja direto. Sem introduções desnecessárias."""
+RESUMO:
+(2 linhas descrevendo o que foi encontrado)
+
+VULNERABILIDADES:
+(liste as mais críticas com CVE se souber; escreva "Nenhuma identificada" se não houver)
+
+PRÓXIMOS PASSOS:
+(2-3 comandos concretos e prontos para executar)
+
+RISCO GERAL: <Baixo | Médio | Alto | Crítico>
+
+Seja direto e técnico. Sem introduções, sem repetir o output."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.2,       # mais determinístico para análise técnica
+                max_output_tokens=1024,
+            ),
+        )
         return response.text
     except Exception as e:
-        return f"[Erro Gemini] {e}"
+        return f"[Erro Gemini] {type(e).__name__}: {e}"
 
-# ── Ferramentas ───────────────────────────────────────────────────────────────
-def run_tool(cmd: list, timeout: int = 300) -> tuple[str, str, int]:
-    """Executa comando e retorna (stdout, stderr, returncode)."""
+# ── Executor de comandos ──────────────────────────────────────────────────────
+def run_tool(cmd: list, timeout: int = 300) -> tuple:
+    """Executa comando externo e retorna (stdout, stderr, returncode)."""
     try:
         proc = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=timeout
+            timeout=timeout,
         )
         return proc.stdout, proc.stderr, proc.returncode
     except subprocess.TimeoutExpired:
-        return "", "[TIMEOUT] O comando excedeu o tempo limite.", -1
+        return "", f"[TIMEOUT] Comando excedeu {timeout}s: {' '.join(cmd)}", -1
     except FileNotFoundError:
-        return "", f"[ERRO] Ferramenta não encontrada: {cmd[0]}", -1
+        return "", f"[ERRO] Ferramenta não encontrada: '{cmd[0]}'. Instale com apt.", -1
+    except Exception as e:
+        return "", f"[ERRO] {e}", -1
 
-def tool_nmap(target: str) -> tuple[str, str]:
-    """Scan nmap de portas e serviços."""
-    print(f"{C.CYAN}[*] Executando nmap em {target}...{C.RESET}")
+# ── Ferramentas ───────────────────────────────────────────────────────────────
+def tool_nmap(target: str) -> tuple:
     options = [
-        ("Rápido (top 100 portas)",    ["-F", "--open"]),
-        ("Completo (todas as portas)", ["-p-", "--open"]),
-        ("Serviços e versões",         ["-sV", "-sC", "--open"]),
-        ("UDP top 20",                 ["-sU", "--top-ports", "20"]),
+        ("Rápido — top 100 portas abertas",        ["-F", "--open"]),
+        ("Completo — todas as 65535 portas",        ["-p-", "--open"]),
+        ("Serviços e versões (recomendado)",        ["-sV", "-sC", "--open"]),
+        ("UDP — top 20 portas",                     ["-sU", "--top-ports", "20"]),
     ]
-    print("\nTipo de scan:")
+    print(f"\n{C.BOLD}Tipo de scan nmap:{C.RESET}")
     for i, (desc, _) in enumerate(options, 1):
         print(f"  {i}. {desc}")
-    choice = input("Escolha [1-4]: ").strip()
-    idx = int(choice) - 1 if choice.isdigit() and 1 <= int(choice) <= 4 else 0
+
+    choice = input("Escolha [1-4, padrão=3]: ").strip()
+    idx = (int(choice) - 1) if choice.isdigit() and 1 <= int(choice) <= 4 else 2
     flags = options[idx][1]
 
+    print(f"{C.CYAN}[*] nmap {' '.join(flags)} {target} ...{C.RESET}")
     cmd = ["nmap"] + flags + ["-oN", "-", target]
     stdout, stderr, rc = run_tool(cmd, timeout=600)
-    output = stdout or stderr
-    return "nmap", output
+    return "nmap", stdout or stderr
 
-def tool_nikto(target: str) -> tuple[str, str]:
-    """Scan de vulnerabilidades web com nikto."""
-    print(f"{C.CYAN}[*] Executando nikto em {target}...{C.RESET}")
+def tool_nikto(target: str) -> tuple:
     url = target if target.startswith("http") else f"http://{target}"
-    cmd = ["nikto", "-h", url, "-nointeractive"]
+    print(f"{C.CYAN}[*] nikto -h {url} ...{C.RESET}")
+    cmd = ["nikto", "-h", url, "-nointeractive", "-Tuning", "123457890"]
     stdout, stderr, rc = run_tool(cmd, timeout=300)
     return "nikto", stdout or stderr
 
-def tool_gobuster(target: str) -> tuple[str, str]:
-    """Enumeração de diretórios com gobuster."""
-    print(f"{C.CYAN}[*] Executando gobuster em {target}...{C.RESET}")
+def tool_gobuster(target: str) -> tuple:
     url = target if target.startswith("http") else f"http://{target}"
-    wordlist = "/usr/share/wordlists/dirb/common.txt"
-    if not Path(wordlist).exists():
-        wordlist = "/usr/share/wordlists/dirbuster/directory-list-2.3-small.txt"
-    if not Path(wordlist).exists():
-        return "gobuster", "[ERRO] Wordlist não encontrada. Instale: apt install wordlists"
-    cmd = ["gobuster", "dir", "-u", url, "-w", wordlist, "-t", "20", "-q"]
+
+    # Procura wordlist disponível
+    candidates = [
+        "/usr/share/wordlists/dirb/common.txt",
+        "/usr/share/wordlists/dirbuster/directory-list-2.3-small.txt",
+        "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt",
+    ]
+    wordlist = next((w for w in candidates if Path(w).exists()), None)
+    if not wordlist:
+        return "gobuster", (
+            "[ERRO] Nenhuma wordlist encontrada.\n"
+            "Execute: sudo apt install wordlists && gunzip /usr/share/wordlists/rockyou.txt.gz"
+        )
+
+    threads = input("Threads [padrão=20, mais rápido=50]: ").strip() or "20"
+    print(f"{C.CYAN}[*] gobuster dir -u {url} -w {wordlist} -t {threads} ...{C.RESET}")
+    cmd = ["gobuster", "dir", "-u", url, "-w", wordlist, "-t", threads, "-q", "--no-error"]
     stdout, stderr, rc = run_tool(cmd, timeout=300)
     return "gobuster", stdout or stderr
 
-def tool_bettercap(target: str) -> tuple[str, str]:
-    """Recon wireless com bettercap (requer root)."""
+def tool_bettercap(target: str) -> tuple:
     if os.geteuid() != 0:
-        return "bettercap", "[ERRO] bettercap requer execução como root (sudo)."
-    iface = input("Interface wireless [ex: wlan1]: ").strip() or "wlan1"
-    print(f"{C.CYAN}[*] Executando bettercap (30s de captura)...{C.RESET}")
-    script = f"set wifi.recon.channel 0; wifi.recon on; sleep 30; wifi.show; exit"
+        return "bettercap", (
+            "[ERRO] bettercap requer root.\n"
+            "Execute: sudo pirecon   (ou sudo python3 scanner.py)"
+        )
+
+    iface = input("Interface wireless [ex: wlan1, padrão=wlan1]: ").strip() or "wlan1"
+    duration = input("Duração do recon em segundos [padrão=30]: ").strip() or "30"
+
+    print(f"{C.CYAN}[*] bettercap wifi.recon em {iface} por {duration}s ...{C.RESET}")
+    script = f"set wifi.recon.channel 0; wifi.recon on; sleep {duration}; wifi.show; exit"
     cmd = ["bettercap", "-iface", iface, "-eval", script]
-    stdout, stderr, rc = run_tool(cmd, timeout=60)
+    stdout, stderr, rc = run_tool(cmd, timeout=int(duration) + 30)
     return "bettercap", stdout or stderr
 
 # ── Logging ───────────────────────────────────────────────────────────────────
-def save_log(target: str, tool: str, raw: str, analysis: str):
-    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    fname = LOG_DIR / f"{ts}_{tool}_{target.replace('/', '_')}.json"
-    data = {
-        "timestamp": ts,
-        "target": target,
-        "tool": tool,
-        "raw_output": raw,
+def save_log(target: str, tool: str, raw: str, analysis: str) -> Path:
+    ts    = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe  = target.replace("/", "_").replace(":", "-").replace(" ", "_")
+    fname = LOG_DIR / f"{ts}_{tool}_{safe}.json"
+    data  = {
+        "timestamp":       ts,
+        "target":          target,
+        "tool":            tool,
+        "model":           GEMINI_MODEL,
+        "raw_output":      raw,
         "gemini_analysis": analysis,
     }
-    with open(fname, "w") as f:
+    with open(fname, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"{C.GREEN}[+] Log salvo: {fname}{C.RESET}")
+    return fname
 
-# ── E-Paper display ───────────────────────────────────────────────────────────
+# ── E-Paper ───────────────────────────────────────────────────────────────────
 def display_on_epaper(tool: str, target: str, analysis: str):
-    """Exibe resumo no display Waveshare e-paper."""
     if not EPAPER_ENABLED:
         return
     try:
@@ -165,7 +207,7 @@ def display_on_epaper(tool: str, target: str, analysis: str):
     except Exception as e:
         print(f"{C.YELLOW}[!] E-paper erro: {e}{C.RESET}")
 
-# ── Menu principal ────────────────────────────────────────────────────────────
+# ── UI ────────────────────────────────────────────────────────────────────────
 TOOLS = {
     "1": ("nmap",      tool_nmap),
     "2": ("nikto",     tool_nikto),
@@ -180,39 +222,97 @@ def print_banner():
  ██████╔╝██║    ██████╔╝█████╗  ██║     ██║   ██║██╔██╗ ██║
  ██╔═══╝ ██║    ██╔══██╗██╔══╝  ██║     ██║   ██║██║╚██╗██║
  ██║     ██║    ██║  ██║███████╗╚██████╗╚██████╔╝██║ ╚████║
- ╚═╝     ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝
-{C.RESET}{C.CYAN}        Raspberry Pi Recon Tool  ·  Powered by Gemini AI{C.RESET}
+ ╚═╝     ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝{C.RESET}
+{C.CYAN}         Raspberry Pi Recon Tool  ·  Powered by Gemini AI{C.RESET}
+{C.DIM}         Modelo: {GEMINI_MODEL}  ·  Logs: {LOG_DIR.resolve()}{C.RESET}
 """)
 
+def print_menu():
+    print(f"{C.BOLD}{'─'*52}{C.RESET}")
+    print(f"{C.BOLD} FERRAMENTAS{C.RESET}")
+    print(f"{'─'*52}")
+    descs = {
+        "1": "nmap      — port scan e detecção de serviços",
+        "2": "nikto     — vulnerabilidades em servidores web",
+        "3": "gobuster  — enumeração de diretórios/arquivos",
+        "4": "bettercap — recon wireless (requer root)",
+    }
+    for k, desc in descs.items():
+        print(f"  {C.CYAN}{k}{C.RESET}. {desc}")
+    print(f"  {C.CYAN}0{C.RESET}. Sair")
+    print(f"{C.BOLD}{'─'*52}{C.RESET}")
+
+def print_raw(output: str):
+    print(f"\n{C.BOLD}── OUTPUT BRUTO {'─'*34}{C.RESET}")
+    print(output[:3000])
+    if len(output) > 3000:
+        print(f"{C.DIM}[... {len(output)-3000} caracteres adicionais salvos no log ...]{C.RESET}")
+    print(f"{C.BOLD}{'─'*52}{C.RESET}")
+
+def print_analysis(analysis: str):
+    print(f"\n{C.BOLD}{C.GREEN}── ANÁLISE GEMINI ({GEMINI_MODEL}) {'─'*18}{C.RESET}")
+    # Destaca a linha de risco
+    for line in analysis.splitlines():
+        if "RISCO GERAL" in line.upper():
+            risco = line.upper()
+            if "CRÍTICO" in risco:
+                print(f"{C.RED}{C.BOLD}{line}{C.RESET}")
+            elif "ALTO" in risco:
+                print(f"{C.YELLOW}{C.BOLD}{line}{C.RESET}")
+            elif "MÉDIO" in risco or "MEDIO" in risco:
+                print(f"{C.YELLOW}{line}{C.RESET}")
+            else:
+                print(f"{C.GREEN}{line}{C.RESET}")
+        else:
+            print(line)
+    print(f"{C.BOLD}{'─'*52}{C.RESET}")
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     print_banner()
 
+    # Valida API key
     if GEMINI_API_KEY == "SUA_CHAVE_AQUI":
-        print(f"{C.RED}[ERRO] Defina sua chave: export GEMINI_API_KEY='sua_chave'{C.RESET}")
+        print(f"{C.RED}[ERRO] API Key não configurada.{C.RESET}")
+        print(f"       1. Obtenha sua chave em: https://aistudio.google.com/app/apikey")
+        print(f"       2. Execute: export GEMINI_API_KEY='sua_chave'")
+        print(f"       3. Para persistir: echo 'export GEMINI_API_KEY=\"sua_chave\"' >> ~/.bashrc")
         sys.exit(1)
 
-    print(f"{C.YELLOW}[*] Inicializando Gemini ({GEMINI_MODEL})...{C.RESET}")
-    model = init_gemini()
-    print(f"{C.GREEN}[+] Gemini pronto!{C.RESET}")
+    # Inicializa cliente
+    print(f"{C.YELLOW}[*] Conectando ao Gemini ({GEMINI_MODEL})...{C.RESET}")
+    try:
+        client = init_gemini()
+        # Teste rápido de conectividade
+        client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents="ok",
+            config=types.GenerateContentConfig(max_output_tokens=5),
+        )
+        print(f"{C.GREEN}[+] Gemini conectado e funcionando.{C.RESET}")
+    except Exception as e:
+        print(f"{C.RED}[ERRO] Falha ao conectar ao Gemini: {e}{C.RESET}")
+        print(f"       Verifique sua API key e conexão com a internet.")
+        sys.exit(1)
+
     if EPAPER_ENABLED:
         print(f"{C.GREEN}[+] Display e-paper detectado.{C.RESET}")
+    else:
+        print(f"{C.DIM}[~] Display e-paper não detectado (modo terminal).{C.RESET}")
 
+    # Loop principal
     while True:
-        print(f"\n{C.BOLD}{'─'*50}{C.RESET}")
-        print(f"{C.BOLD}FERRAMENTAS DISPONÍVEIS:{C.RESET}")
-        for k, (name, _) in TOOLS.items():
-            print(f"  {k}. {name}")
-        print(f"  0. Sair")
-        print(f"{C.BOLD}{'─'*50}{C.RESET}")
+        print()
+        print_menu()
 
-        choice = input("\nEscolha a ferramenta: ").strip()
+        choice = input(f"\n{C.BOLD}Escolha [{'/'.join(TOOLS.keys())}/0]: {C.RESET}").strip()
 
         if choice == "0":
-            print(f"{C.CYAN}[*] Saindo...{C.RESET}")
+            print(f"\n{C.CYAN}[*] Saindo. Logs salvos em: {LOG_DIR.resolve()}{C.RESET}\n")
             break
 
         if choice not in TOOLS:
-            print(f"{C.RED}[!] Opção inválida.{C.RESET}")
+            print(f"{C.RED}[!] Opção inválida. Escolha entre 1-4 ou 0 para sair.{C.RESET}")
             continue
 
         target = input("Alvo (IP, hostname ou URL): ").strip()
@@ -222,33 +322,45 @@ def main():
 
         tool_name, tool_fn = TOOLS[choice]
 
-        # Executa a ferramenta
-        _, raw_output = tool_fn(target)
-
-        if not raw_output.strip():
-            print(f"{C.YELLOW}[!] Nenhum output gerado.{C.RESET}")
+        # ── Executa ferramenta ────────────────────────────────────────────────
+        try:
+            _, raw_output = tool_fn(target)
+        except KeyboardInterrupt:
+            print(f"\n{C.YELLOW}[!] Scan interrompido pelo usuário.{C.RESET}")
             continue
 
-        # Mostra output bruto
-        print(f"\n{C.BOLD}── OUTPUT BRUTO ──{C.RESET}")
-        print(raw_output[:3000])
-        if len(raw_output) > 3000:
-            print(f"{C.YELLOW}[...truncado, completo no log]{C.RESET}")
+        if not raw_output.strip():
+            print(f"{C.YELLOW}[!] Nenhum output gerado pela ferramenta.{C.RESET}")
+            continue
 
-        # Análise com Gemini
-        print(f"\n{C.YELLOW}[*] Analisando com Gemini AI...{C.RESET}")
-        analysis = analyze_with_gemini(model, tool_name, target, raw_output)
+        # ── Mostra output bruto ───────────────────────────────────────────────
+        print_raw(raw_output)
 
-        print(f"\n{C.BOLD}{C.GREEN}── ANÁLISE GEMINI ──{C.RESET}")
-        print(analysis)
+        # ── Análise com Gemini ────────────────────────────────────────────────
+        print(f"\n{C.YELLOW}[*] Enviando para Gemini AI...{C.RESET}")
+        try:
+            analysis = analyze_with_gemini(client, tool_name, target, raw_output)
+        except KeyboardInterrupt:
+            print(f"\n{C.YELLOW}[!] Análise cancelada.{C.RESET}")
+            analysis = "[Análise cancelada pelo usuário]"
 
-        # Salva log
-        save_log(target, tool_name, raw_output, analysis)
+        print_analysis(analysis)
 
-        # Exibe no e-paper
+        # ── Salva log ─────────────────────────────────────────────────────────
+        log_path = save_log(target, tool_name, raw_output, analysis)
+        print(f"{C.GREEN}[+] Log salvo: {log_path}{C.RESET}")
+
+        # ── Atualiza e-paper ──────────────────────────────────────────────────
         display_on_epaper(tool_name, target, analysis)
 
-        input(f"\n{C.CYAN}[Enter para continuar...]{C.RESET}")
+        try:
+            input(f"\n{C.DIM}[Enter para voltar ao menu...]{C.RESET}")
+        except KeyboardInterrupt:
+            print()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print(f"\n\n{C.CYAN}[*] Interrompido. Até mais.{C.RESET}\n")
+        sys.exit(0)
