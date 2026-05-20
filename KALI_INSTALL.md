@@ -72,26 +72,117 @@ Se você não tem Wi-Fi ou prefere conectar o Pi diretamente ao seu computador v
 ## 5. Primeiro Acesso e Conexão
 
 ### Conexão Física
-- **Via Wi-Fi:** Conecte o cabo de energia na porta **PWR**.
-- **Via USB Gadget:** Conecte o cabo USB na porta **USB** (a porta do meio, não a da ponta). Esta porta fornecerá energia e dados.
 
-### Acessando via Windows
-1. Ao conectar via USB, o Windows pode reconhecer o Pi como uma porta serial ou dispositivo desconhecido.
-2. Abra o **Gerenciador de Dispositivos**. Se aparecer "RNDIS" com um erro, você precisará instalar o driver "USB Ethernet/RNDIS Gadget" (disponível via Windows Update ou manualmente).
-3. Uma vez reconhecido, o Pi terá o endereço IP padrão `169.254.x.x` (Auto-IP).
-4. Use o terminal (PowerShell/CMD) para conectar:
-   ```bash
-   ssh kali@pirecon.local
-   ```
+> ⚠️ **Atenção crítica:** O Raspberry Pi Zero 2W possui **duas portas micro-USB**:
+> - A porta mais próxima da borda da placa é a **PWR** (apenas energia).
+> - A porta do **meio** é a **USB** (dados + energia).
+>
+> Para o modo USB Gadget funcionar, o cabo **obrigatoriamente** deve estar na porta **USB (do meio)**. Conectar na PWR fará a interface `usb0` aparecer sem carrier (`NO-CARRIER`) no host, mesmo com tudo configurado corretamente.
+
+- **Via Wi-Fi:** Conecte o cabo de energia na porta **PWR**.
+- **Via USB Gadget:** Conecte o cabo USB na porta **USB** (a do meio). Esta porta fornece energia e dados simultaneamente.
+
+---
 
 ### Acessando via Linux
-1. Ao conectar o USB, o Linux geralmente reconhece a interface de rede automaticamente (ex: `usb0`).
-2. Vá nas configurações de rede do seu sistema, encontre a nova conexão com fio e altere o método IPv4 para **"Shared to other computers"** (Compartilhado com outros computadores) ou garanta que ele obtenha um IP via Link-Local.
-3. Conecte via terminal:
-   ```bash
-   ssh kali@pirecon.local
+
+#### Passo 1 — Verificar o reconhecimento da interface
+
+Após conectar o cabo USB na porta correta e aguardar ~60 segundos para o Pi bootar, execute:
+
+```bash
+ip a
+```
+
+Você deve ver a interface `usb0` com estado `UP` (não `NO-CARRIER`):
+
+```
+4: usb0: <BROADCAST,MULTICAST,UP,LOWER_UP> ...
+    inet 169.254.x.x/16 ...
+```
+
+> **Se `usb0` aparecer como `NO-CARRIER`**, há um problema de hardware ou configuração:
+> 1. Confirme que o cabo está na porta **USB (do meio)**, não na PWR.
+> 2. Confirme que o cabo USB suporta dados (cabos "charge-only" não funcionam).
+> 3. Confirme que as alterações em `config.txt` e `cmdline.txt` foram salvas corretamente (veja o Passo 4C).
+> 4. Aguarde mais tempo — o primeiro boot do Kali pode levar de 2 a 4 minutos.
+
+#### Passo 2 — Configurar compartilhamento de IP via NetworkManager
+
+O Linux não atribui IP automaticamente para a interface `usb0`. É necessário configurar o compartilhamento via **NetworkManager**:
+
+**Opção A — Via interface gráfica (GNOME/KDE):**
+1. Abra as **Configurações de Rede**.
+2. Encontre a conexão com fio que apareceu (geralmente chamada de "Ethernet" ou "USB Ethernet").
+3. Clique em editar (ícone de engrenagem).
+4. Na aba **IPv4**, mude o método para **"Compartilhado com outros computadores"** (*Shared to other computers*).
+5. Salve e reconecte.
+
+**Opção B — Via terminal (nmcli):**
+```bash
+# Encontre o nome exato da conexão usb0
+nmcli device status
+
+# Crie ou edite a conexão para compartilhamento
+sudo nmcli connection add type ethernet ifname usb0 con-name "pi-usb" \
+  ipv4.method shared ipv6.method ignore
+
+sudo nmcli connection up "pi-usb"
+```
+
+Após isso, seu computador atribuirá um IP ao Pi (geralmente na faixa `10.42.0.x`) e o `usb0` ficará com `UP`.
+
+#### Passo 3 — Descobrir o IP do Pi e conectar via SSH
+
+O mDNS (`.local`) pode não funcionar de imediato. Use uma das abordagens abaixo para descobrir o IP:
+
+**Abordagem 1 — arp-scan (mais confiável):**
+```bash
+sudo apt install arp-scan   # se ainda não tiver instalado
+sudo arp-scan --interface=usb0 --localnet
+```
+
+**Abordagem 2 — nmap:**
+```bash
+# Substitua 10.42.0.0/24 pela sua faixa (veja ip a para confirmar)
+sudo nmap -sn 10.42.0.0/24
+```
+
+**Abordagem 3 — verificar leases do dnsmasq:**
+```bash
+cat /var/lib/misc/dnsmasq.leases
+# ou
+cat /var/lib/NetworkManager/dnsmasq-*.leases 2>/dev/null
+```
+
+Com o IP em mãos (ex: `10.42.0.100`), conecte:
+
+```bash
+ssh kali@10.42.0.100
+```
+
+> **Sobre o `kali.local`:** O hostname `.local` via mDNS depende do serviço Avahi estar ativo no Pi. No primeiro boot do Kali ele pode não estar disponível ainda. Após o sistema estar configurado e o Avahi instalado/habilitado, você poderá usar `ssh kali@kali.local`. Evite depender dele no primeiro acesso.
+
+> **Credenciais padrão do Kali:** usuário `kali`, senha `kali`.
+
+---
+
+### Acessando via Windows
+
+1. Ao conectar via USB (porta do meio), o Windows pode reconhecer o Pi como dispositivo desconhecido ou "RNDIS".
+2. Abra o **Gerenciador de Dispositivos**. Se aparecer "RNDIS" com erro amarelo, instale o driver **"USB Ethernet/RNDIS Gadget"** (disponível via Windows Update ou manualmente no site da Microsoft).
+3. Uma vez reconhecido como adaptador de rede, o Pi receberá um IP na faixa `169.254.x.x` (Auto-IP via APIPA).
+4. Descubra o IP do Pi:
+   ```powershell
+   arp -a
    ```
-   *(Ou use `ssh kali@169.254.x.x` se souber o IP).*
+   Procure por uma entrada na faixa `169.254.x.x` associada ao adaptador USB.
+5. Conecte via PowerShell ou CMD:
+   ```bash
+   ssh kali@169.254.x.x
+   ```
+
+> **Credenciais padrão do Kali:** usuário `kali`, senha `kali`.
 
 ---
 
