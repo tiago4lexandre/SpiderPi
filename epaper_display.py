@@ -11,7 +11,11 @@ Instale as dependências:
 
 import textwrap
 import time
+import sys
 from datetime import datetime
+
+# Adiciona o caminho de instalação padrão como fallback
+sys.path.append("/opt/pi_recon")
 
 # ── Modelo do seu display ─────────────────────────────────────────────────────
 # Altere para o modelo exato do seu Waveshare:
@@ -21,11 +25,25 @@ DISPLAY_MODEL = "epd2in13_V4"
 from PIL import Image, ImageDraw, ImageFont
 
 # ── Importa driver dinamicamente ──────────────────────────────────────────────
+epd_driver = None
+DRIVER_OK = False
+
 try:
-    from waveshare_epd import epd2in13_V4 as epd_driver
+    import importlib
+    # Tenta carregar o módulo waveshare_epd.<DISPLAY_MODEL>
+    waveshare_module = importlib.import_module(f"waveshare_epd.{DISPLAY_MODEL}")
+    epd_driver = waveshare_module
     DRIVER_OK = True
 except ImportError:
-    DRIVER_OK = False
+    pass
+
+# Fallback: Caso o usuário tenha instalado via pip e o nome seja diferente ou direto
+if not DRIVER_OK:
+    try:
+        from waveshare_epd import epd2in13_V4 as epd_driver
+        DRIVER_OK = True
+    except ImportError:
+        pass
 
 # Dimensões padrão por modelo (largura x altura em pixels)
 DISPLAY_SIZES = {
@@ -113,13 +131,15 @@ def build_image(tool: str, target: str, analysis: str) -> Image.Image:
 def show_scan_result(tool: str, target: str, analysis: str):
     """Atualiza o display e-paper com o resultado do scan."""
     if not DRIVER_OK:
-        print("[e-paper] Driver não disponível — pulando display.")
+        print(f"[e-paper] Driver '{DISPLAY_MODEL}' não disponível.")
+        print("          Certifique-se de que a pasta 'waveshare_epd' existe ou execute 'sudo ./setup.sh'.")
         return
 
     try:
         epd = epd_driver.EPD()
         epd.init()
         epd.Clear(0xFF)
+
 
         img = build_image(tool, target, analysis)
 

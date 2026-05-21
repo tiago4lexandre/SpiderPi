@@ -54,6 +54,23 @@ source ~/.bashrc
 
 ---
 
+## Diagnóstico do Display
+
+Se o display não estiver exibindo imagens ou você receber o erro `Driver não disponível`, utilize o script de diagnóstico:
+
+```bash
+# Navegue até a pasta do projeto e execute:
+python3 test_epaper.py
+```
+
+O script verificará:
+- Se a interface SPI está habilitada.
+- Se as bibliotecas Python (Pillow, RPi.GPIO, spidev) estão instaladas.
+- Se os drivers específicos da Waveshare foram baixados corretamente.
+- Permite realizar um teste de desenho (flash) na tela.
+
+---
+
 ## Configuração do E-Paper
 
 Edite `epaper_display.py` e altere `DISPLAY_MODEL` para o seu modelo:

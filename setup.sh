@@ -58,41 +58,34 @@ step "Limpeza e Atualização do Sistema"
 log "Limpando diretório temporário (/tmp)..."
 rm -rf /tmp/* || true
 
-log "Limpando cache e corrigindo listas do APT..."
-rm -rf /var/lib/apt/lists/*
-apt-get clean
+log "Atualizando listas do APT..."
 apt-get update -qq
 
-log "Sistema limpo e atualizado."
+step "Instalando ferramentas de sistema e hardware"
 
-step "Instalando ferramentas de segurança"
-
-# Instala uma por vez para facilitar diagnóstico de erros
+# Pacotes de sistema necessários para o display e ferramentas
 APT_PACKAGES=(
-    "nmap"
-    "nikto"
-    "gobuster"
-    "bettercap"
-    "aircrack-ng"
-    "wordlists"
-    "python3-pip"
-    "python3-venv"
-    "python3-dev"
-    "libjpeg-dev"
-    "zlib1g-dev"
-    "libfreetype6-dev"
-    "git"
-    "fonts-dejavu"
+    "nmap" "nikto" "gobuster" "bettercap" "aircrack-ng" "wordlists"
+    "python3-pip" "python3-venv" "python3-dev" "git" "fonts-dejavu"
+    "libjpeg-dev" "zlib1g-dev" "libfreetype6-dev"
+    "python3-spidev" "python3-rpi.gpio" "python3-gpiozero" "python3-lgpio"
 )
 
 for pkg in "${APT_PACKAGES[@]}"; do
     if dpkg -s "$pkg" &>/dev/null; then
-        log "$pkg já instalado, pulando."
+        log "$pkg já instalado."
     else
         log "Instalando $pkg..."
-        apt-get install -y -qq "$pkg" || warn "Falha ao instalar $pkg — continuando."
+        apt-get install -y -qq "$pkg" || warn "Falha ao instalar $pkg."
     fi
 done
+
+# Configura permissões para o usuário atual (se não for root)
+CURRENT_USER=$(logname 2>/dev/null || echo $SUDO_USER)
+if [ ! -z "$CURRENT_USER" ]; then
+    log "Configurando permissões para o usuário: $CURRENT_USER"
+    usermod -a -G gpio,spi,i2c "$CURRENT_USER" || true
+fi
 
 # ── Wordlists ─────────────────────────────────────────────────────────────────
 if [ -f /usr/share/wordlists/rockyou.txt.gz ]; then
@@ -101,80 +94,53 @@ if [ -f /usr/share/wordlists/rockyou.txt.gz ]; then
 fi
 
 # ════════════════════════════════════════════════════════
-# 3. PYTHON — ambiente virtual + dependências uma a uma
+# 3. PYTHON — ambiente virtual + dependências
 # ════════════════════════════════════════════════════════
-step "Criando ambiente virtual Python"
+step "Configurando Ambiente Virtual Python"
 
-if [ ! -d "/opt/pi_recon_env" ]; then
-    python3 -m venv /opt/pi_recon_env
-    log "Ambiente virtual criado em /opt/pi_recon_env"
-else
-    log "Ambiente virtual já existe, reutilizando."
+VENV_PATH="/opt/pi_recon_env"
+if [ ! -d "$VENV_PATH" ]; then
+    python3 -m venv "$VENV_PATH"
 fi
 
-PIP="/opt/pi_recon_env/bin/pip"
-
-log "Atualizando pip..."
+PIP="$VENV_PATH/bin/pip"
 $PIP install --upgrade pip -q
 
-# Função auxiliar: instala pacote pip com retry e feedback
-pip_install() {
-    local pkg="$1"
-    local extra_flags="${2:-}"
-    log "Instalando Python: $pkg ..."
-
-    # Tenta wheel binária primeiro (mais rápido, menos RAM)
-    if $PIP install "$pkg" --only-binary=:all: $extra_flags -q 2>/dev/null; then
-        log "$pkg instalado via wheel binária."
-        return 0
-    fi
-
-    # Fallback: compila do fonte
-    warn "$pkg sem wheel disponível, compilando do fonte (pode demorar)..."
-    if $PIP install "$pkg" $extra_flags -q; then
-        log "$pkg compilado e instalado."
-        return 0
-    fi
-
-    warn "Falha ao instalar $pkg — verifique manualmente depois."
-    return 1
-}
-
-# Instala cada dependência separadamente
-pip_install "google-genai"
-pip_install "Pillow"
-pip_install "RPi.GPIO"
-pip_install "spidev"
+log "Instalando dependências Python no venv..."
+# rpi-lgpio é o segredo para evitar o erro 'Failed to add edge detection' em kernels novos
+$PIP install google-genai Pillow RPi.GPIO spidev gpiozero rpi-lgpio -q
 
 # ════════════════════════════════════════════════════════
 # 4. DRIVER WAVESHARE E-PAPER
 # ════════════════════════════════════════════════════════
-step "Instalando driver Waveshare e-paper"
+step "Instalando drivers Waveshare"
 
-# 1. Detecta o modelo do display configurado em epaper_display.py
 DISPLAY_MODEL=$(grep "^DISPLAY_MODEL =" epaper_display.py | cut -d'"' -f2 || echo "epd2in13_V4")
-if [ -z "$DISPLAY_MODEL" ]; then
-    DISPLAY_MODEL="epd2in13_V4"
-    warn "Modelo não detectado em epaper_display.py, usando padrão: $DISPLAY_MODEL"
-else
-    log "Modelo de display detectado em epaper_display.py: $DISPLAY_MODEL"
-fi
-
-# 2. Cria a estrutura da biblioteca waveshare_epd no diretório de instalação
 TARGET_LIB_DIR="/opt/pi_recon/waveshare_epd"
+LOCAL_LIB_DIR="./waveshare_epd"
+
 mkdir -p "$TARGET_LIB_DIR"
+mkdir -p "$LOCAL_LIB_DIR"
 
 BASE_URL="https://raw.githubusercontent.com/waveshareteam/e-Paper/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd"
 
-log "Instalando drivers específicos para $DISPLAY_MODEL..."
+install_drivers() {
+    local dest="$1"
+    log "Instalando drivers em $dest..."
+    if curl -s -f "$BASE_URL/__init__.py" -o "$dest/__init__.py" && \
+       curl -s -f "$BASE_URL/epdconfig.py" -o "$dest/epdconfig.py" && \
+       curl -s -f "$BASE_URL/${DISPLAY_MODEL}.py" -o "$dest/${DISPLAY_MODEL}.py"; then
+        return 0
+    else
+        return 1
+    fi
+}
 
-# Baixa apenas os arquivos necessários da Waveshare via curl
-if curl -s -f "$BASE_URL/__init__.py" -o "$TARGET_LIB_DIR/__init__.py" && \
-   curl -s -f "$BASE_URL/epdconfig.py" -o "$TARGET_LIB_DIR/epdconfig.py" && \
-   curl -s -f "$BASE_URL/${DISPLAY_MODEL}.py" -o "$TARGET_LIB_DIR/${DISPLAY_MODEL}.py"; then
-    log "Drivers do e-paper instalados com sucesso em $TARGET_LIB_DIR (~10KB baixados)."
+log "Baixando drivers para $DISPLAY_MODEL..."
+if install_drivers "$TARGET_LIB_DIR" && cp -r "$TARGET_LIB_DIR/"* "$LOCAL_LIB_DIR/"; then
+    log "Drivers instalados com sucesso."
 else
-    warn "Falha ao baixar drivers específicos via curl. Tentando fallback com clone esparso..."
+    warn "Falha no download via curl, tentando fallback com clone esparso..."
     
     EPAPER_DIR="/opt/e-paper-temp"
     rm -rf "$EPAPER_DIR"
@@ -189,9 +155,10 @@ else
     
     if git pull --depth=1 origin master -q || git pull --depth=1 origin main -q; then
         cp -r RaspberryPi_JetsonNano/python/lib/waveshare_epd/* "$TARGET_LIB_DIR/"
+        cp -r RaspberryPi_JetsonNano/python/lib/waveshare_epd/* "$LOCAL_LIB_DIR/"
         log "Drivers instalados via clone esparso de fallback."
     else
-        warn "Falha crítica ao obter drivers do e-paper — display pode não funcionar."
+        warn "Falha crítica ao obter drivers do e-paper."
     fi
     cd - > /dev/null
     rm -rf "$EPAPER_DIR"
@@ -206,12 +173,12 @@ mkdir -p /opt/pi_recon/logs
 chmod 777 /opt/pi_recon/logs
 chmod 755 /opt/pi_recon
 
-for f in scanner.py epaper_display.py; do
+for f in scanner.py epaper_display.py test_epaper.py; do
     if [ -f "./$f" ]; then
         cp "./$f" /opt/pi_recon/
         log "$f copiado."
     else
-        warn "$f não encontrado no diretório atual — copie manualmente para /opt/pi_recon/"
+        warn "$f não encontrado no diretório atual."
     fi
 done
 
@@ -258,22 +225,12 @@ echo "  Python venv: /opt/pi_recon_env"
 echo "  Arquivos   : /opt/pi_recon/"
 echo "  Logs       : /opt/pi_recon/logs/"
 echo ""
-echo "Próximo passo — configure sua API Key:"
+echo "Próximo passo — configure sua API Key e execute o diagnóstico:"
 echo ""
-echo "  No Zsh (padrão no Kali):"
-echo "    echo 'export GEMINI_API_KEY=\"sua_chave\"' >> ~/.zshrc"
-echo "    source ~/.zshrc"
-echo ""
-echo "  No Bash:"
-echo "    echo 'export GEMINI_API_KEY=\"sua_chave\"' >> ~/.bashrc"
-echo "    source ~/.bashrc"
-echo ""
-echo "  Obtenha sua chave gratuita em:"
-echo "  https://aistudio.google.com/app/apikey"
+echo "  sudo ./test_epaper.py"
 echo ""
 echo "Para iniciar:"
-echo "  pirecon              # ferramentas normais"
-echo "  sudo -E pirecon      # bettercap / wireless (preservando API key)"
+echo "  pirecon"
 echo ""
 warn "Use apenas em redes com autorização explícita."
 echo ""
