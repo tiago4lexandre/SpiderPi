@@ -15,20 +15,21 @@ from datetime import datetime
 
 # ── Modelo do seu display ─────────────────────────────────────────────────────
 # Altere para o modelo exato do seu Waveshare:
-# "epd2in13_V3", "epd2in7", "epd3in7", "epd4in2"
-DISPLAY_MODEL = "epd2in13_V3"
+# "epd2in13_V4", "epd2in7", "epd3in7", "epd4in2"
+DISPLAY_MODEL = "epd2in13_V4"
+
+from PIL import Image, ImageDraw, ImageFont
 
 # ── Importa driver dinamicamente ──────────────────────────────────────────────
 try:
-    from waveshare_epd import epd2in13_V3 as epd_driver
-    from PIL import Image, ImageDraw, ImageFont
+    from waveshare_epd import epd2in13_V4 as epd_driver
     DRIVER_OK = True
 except ImportError:
     DRIVER_OK = False
 
 # Dimensões padrão por modelo (largura x altura em pixels)
 DISPLAY_SIZES = {
-    "epd2in13_V3": (122, 250),
+    "epd2in13_V4": (122, 250),
     "epd2in7":     (176, 264),
     "epd3in7":     (280, 480),
     "epd4in2":     (300, 400),

@@ -53,9 +53,17 @@ fi
 # ════════════════════════════════════════════════════════
 # 2. SISTEMA — atualização e ferramentas de segurança
 # ════════════════════════════════════════════════════════
-step "Atualizando sistema"
+step "Limpeza e Atualização do Sistema"
+
+log "Limpando diretório temporário (/tmp)..."
+rm -rf /tmp/* || true
+
+log "Limpando cache e corrigindo listas do APT..."
+rm -rf /var/lib/apt/lists/*
+apt-get clean
 apt-get update -qq
-log "Sistema atualizado."
+
+log "Sistema limpo e atualizado."
 
 step "Instalando ferramentas de segurança"
 
@@ -143,22 +151,50 @@ pip_install "spidev"
 # ════════════════════════════════════════════════════════
 step "Instalando driver Waveshare e-paper"
 
-EPAPER_DIR="/tmp/e-Paper"
-
-if [ ! -d "$EPAPER_DIR" ]; then
-    log "Clonando repositório Waveshare..."
-    git clone --depth=1 https://github.com/waveshare/e-Paper.git "$EPAPER_DIR" -q
+# 1. Detecta o modelo do display configurado em epaper_display.py
+DISPLAY_MODEL=$(grep "^DISPLAY_MODEL =" epaper_display.py | cut -d'"' -f2 || echo "epd2in13_V4")
+if [ -z "$DISPLAY_MODEL" ]; then
+    DISPLAY_MODEL="epd2in13_V4"
+    warn "Modelo não detectado em epaper_display.py, usando padrão: $DISPLAY_MODEL"
 else
-    log "Repositório já existe, reutilizando."
+    log "Modelo de display detectado em epaper_display.py: $DISPLAY_MODEL"
 fi
 
-EPAPER_LIB="$EPAPER_DIR/RaspberryPi_JetsonNano/python"
+# 2. Cria a estrutura da biblioteca waveshare_epd no diretório de instalação
+TARGET_LIB_DIR="/opt/pi_recon/waveshare_epd"
+mkdir -p "$TARGET_LIB_DIR"
 
-if [ -d "$EPAPER_LIB" ]; then
-    log "Instalando biblioteca e-paper..."
-    $PIP install "$EPAPER_LIB" -q || warn "Falha no driver e-paper — display pode não funcionar."
+BASE_URL="https://raw.githubusercontent.com/waveshareteam/e-Paper/master/RaspberryPi_JetsonNano/python/lib/waveshare_epd"
+
+log "Instalando drivers específicos para $DISPLAY_MODEL..."
+
+# Baixa apenas os arquivos necessários da Waveshare via curl
+if curl -s -f "$BASE_URL/__init__.py" -o "$TARGET_LIB_DIR/__init__.py" && \
+   curl -s -f "$BASE_URL/epdconfig.py" -o "$TARGET_LIB_DIR/epdconfig.py" && \
+   curl -s -f "$BASE_URL/${DISPLAY_MODEL}.py" -o "$TARGET_LIB_DIR/${DISPLAY_MODEL}.py"; then
+    log "Drivers do e-paper instalados com sucesso em $TARGET_LIB_DIR (~10KB baixados)."
 else
-    warn "Diretório da biblioteca e-paper não encontrado em $EPAPER_LIB"
+    warn "Falha ao baixar drivers específicos via curl. Tentando fallback com clone esparso..."
+    
+    EPAPER_DIR="/opt/e-paper-temp"
+    rm -rf "$EPAPER_DIR"
+    mkdir -p "$EPAPER_DIR"
+    git init "$EPAPER_DIR" -q
+    cd "$EPAPER_DIR"
+    git remote add origin https://github.com/waveshare/e-Paper.git
+    git config core.sparseCheckout true
+    echo "RaspberryPi_JetsonNano/python/lib/waveshare_epd/__init__.py" >> .git/info/sparse-checkout
+    echo "RaspberryPi_JetsonNano/python/lib/waveshare_epd/epdconfig.py" >> .git/info/sparse-checkout
+    echo "RaspberryPi_JetsonNano/python/lib/waveshare_epd/${DISPLAY_MODEL}.py" >> .git/info/sparse-checkout
+    
+    if git pull --depth=1 origin master -q || git pull --depth=1 origin main -q; then
+        cp -r RaspberryPi_JetsonNano/python/lib/waveshare_epd/* "$TARGET_LIB_DIR/"
+        log "Drivers instalados via clone esparso de fallback."
+    else
+        warn "Falha crítica ao obter drivers do e-paper — display pode não funcionar."
+    fi
+    cd - > /dev/null
+    rm -rf "$EPAPER_DIR"
 fi
 
 # ════════════════════════════════════════════════════════
@@ -167,6 +203,8 @@ fi
 step "Instalando Pi Recon"
 
 mkdir -p /opt/pi_recon/logs
+chmod 777 /opt/pi_recon/logs
+chmod 755 /opt/pi_recon
 
 for f in scanner.py epaper_display.py; do
     if [ -f "./$f" ]; then
@@ -222,15 +260,20 @@ echo "  Logs       : /opt/pi_recon/logs/"
 echo ""
 echo "Próximo passo — configure sua API Key:"
 echo ""
-echo "  echo 'export GEMINI_API_KEY=\"sua_chave\"' >> ~/.bashrc"
-echo "  source ~/.bashrc"
+echo "  No Zsh (padrão no Kali):"
+echo "    echo 'export GEMINI_API_KEY=\"sua_chave\"' >> ~/.zshrc"
+echo "    source ~/.zshrc"
+echo ""
+echo "  No Bash:"
+echo "    echo 'export GEMINI_API_KEY=\"sua_chave\"' >> ~/.bashrc"
+echo "    source ~/.bashrc"
 echo ""
 echo "  Obtenha sua chave gratuita em:"
 echo "  https://aistudio.google.com/app/apikey"
 echo ""
 echo "Para iniciar:"
 echo "  pirecon              # ferramentas normais"
-echo "  sudo pirecon         # bettercap / wireless"
+echo "  sudo -E pirecon      # bettercap / wireless (preservando API key)"
 echo ""
 warn "Use apenas em redes com autorização explícita."
 echo ""

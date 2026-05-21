@@ -37,8 +37,17 @@ cd ~/pi_recon
 chmod +x setup.sh
 sudo ./setup.sh
 
+# O setup.sh criará um ambiente virtual (venv) e instalará o SDK 'google-genai'.
+# Também será criado um alias 'pirecon' para facilitar o acesso e um serviço systemd
+# para mostrar uma tela de boot no e-paper.
+
 # 3. Configure a API Key (Plataforma Antigravity / Google AI Studio)
 # Acesse: https://aistudio.google.com/app/apikey
+# Para Zsh (padrão no Kali):
+echo 'export GEMINI_API_KEY="sua_chave_aqui"' >> ~/.zshrc
+source ~/.zshrc
+
+# Para Bash:
 echo 'export GEMINI_API_KEY="sua_chave_aqui"' >> ~/.bashrc
 source ~/.bashrc
 ```
@@ -51,7 +60,7 @@ Edite `epaper_display.py` e altere `DISPLAY_MODEL` para o seu modelo:
 
 | Modelo Waveshare | Valor em DISPLAY_MODEL |
 |---|---|
-| 2.13" V3 (padrão Pwnagotchi) | `epd2in13_V3` |
+| 2.13" V4 (padrão Pwnagotchi) | `epd2in13_V4` |
 | 2.7" | `epd2in7` |
 | 3.7" | `epd3in7` |
 | 4.2" | `epd4in2` |
@@ -65,7 +74,8 @@ Edite `epaper_display.py` e altere `DISPLAY_MODEL` para o seu modelo:
 pirecon
 
 # Modo Root (necessário para wireless/bettercap)
-sudo pirecon
+# Use -E para passar as variáveis de ambiente (como GEMINI_API_KEY)
+sudo -E pirecon
 ```
 
 ### Fluxo de uso:
