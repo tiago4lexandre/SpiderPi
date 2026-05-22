@@ -1,21 +1,13 @@
-# Pi Recon 🔍 — Powered by Antigravity 2.0
+# SpiderPi 🕷️ — Powered by Antigravity 2.0
 **Ferramenta de reconhecimento de segurança com análise via Antigravity AI (Gemini 3.5 Flash)**
 Para Raspberry Pi Zero 2W com display Waveshare e-paper
-
----
-
-## O que há de novo (Migration to Antigravity)
-Este projeto foi atualizado para a plataforma **Antigravity 2.0**, aproveitando o novo ecossistema agentic do Google.
-- **Modelo:** Migrado para `gemini-3.5-flash` (padrão Antigravity).
-- **Performance:** Latência reduzida e análise mais profunda de vulnerabilidades.
-- **Branding:** Integrado ao Mission Control do Antigravity.
 
 ---
 
 ## Estrutura do Projeto
 
 ```
-pi_recon/
+spiderpi/
 ├── scanner.py          # Script principal — menu e integração Antigravity
 ├── epaper_display.py   # Driver do display Waveshare (v2.0)
 ├── setup.sh            # Instalação automatizada
@@ -29,16 +21,16 @@ pi_recon/
 
 ```bash
 # 1. Clone ou copie os arquivos para o Pi
-scp -r pi_recon/ pi@raspberrypi.local:~/
+scp -r spiderpi/ pi@raspberrypi.local:~/
 
 # 2. No Pi, execute o setup (requer root)
 ssh pi@raspberrypi.local
-cd ~/pi_recon
+cd ~/spiderpi
 chmod +x setup.sh
 sudo ./setup.sh
 
 # O setup.sh criará um ambiente virtual (venv) e instalará o SDK 'google-genai'.
-# Também será criado um alias 'pirecon' para facilitar o acesso e um serviço systemd
+# Também será criado um alias 'spiderpi' para facilitar o acesso e um serviço systemd
 # para mostrar uma tela de boot no e-paper.
 
 # 3. Configure a API Key (Plataforma Antigravity / Google AI Studio)
@@ -88,11 +80,11 @@ Edite `epaper_display.py` e altere `DISPLAY_MODEL` para o seu modelo:
 
 ```bash
 # Modo padrão
-pirecon
+spiderpi
 
 # Modo Root (necessário para wireless/bettercap)
 # Use -E para passar as variáveis de ambiente (como GEMINI_API_KEY)
-sudo -E pirecon
+sudo -E spiderpi
 ```
 
 ### Fluxo de uso:

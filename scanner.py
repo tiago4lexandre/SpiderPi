@@ -168,7 +168,7 @@ def tool_bettercap(target: str) -> tuple:
     if os.geteuid() != 0:
         return "bettercap", (
             "[ERRO] bettercap requer root.\n"
-            "Execute: sudo pirecon   (ou sudo python3 scanner.py)"
+            "Execute: sudo spiderpi   (ou sudo python3 scanner.py)"
         )
 
     iface = input("Interface wireless [ex: wlan1, padrão=wlan1]: ").strip() or "wlan1"
@@ -215,15 +215,18 @@ TOOLS = {
 }
 
 def print_banner():
-    print(f"""{C.GREEN}{C.BOLD}
- ██████╗ ██╗    ██████╗ ███████╗ ██████╗ ██████╗ ███╗   ██╗
- ██╔══██╗██║    ██╔══██╗██╔════╝██╔════╝██╔═══██╗████╗  ██║
- ██████╔╝██║    ██████╔╝█████╗  ██║     ██║   ██║██╔██╗ ██║
- ██╔═══╝ ██║    ██╔══██╗██╔══╝  ██║     ██║   ██║██║╚██╗██║
- ██║     ██║    ██║  ██║███████╗╚██████╗╚██████╔╝██║ ╚████║
- ╚═╝     ╚═╝    ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝{C.RESET}
-{C.CYAN}      Raspberry Pi Recon Tool  ·  Powered by Antigravity 2.0{C.RESET}
-{C.DIM}         Modelo: {ANTIGRAVITY_MODEL}  ·  Logs: {LOG_DIR.resolve()}{C.RESET}
+    # Usando raw string (r""") para evitar SyntaxWarning com as barras da aranha
+    print(rf"""{C.GREEN}{C.BOLD}
+      / _ \
+    \_\(_)/_/
+     _//o\\_    ███████╗██████╗ ██╗██████╗ ███████╗██████╗ ██████╗ ██╗
+      /   \    ██╔════╝██╔══██╗██║██╔══██╗██╔════╝██╔══██╗██╔══██╗██║
+               ███████╗██████╔╝██║██║  ██║█████╗  ██████╔╝██████╔╝██║
+               ╚════██║██╔═══╝ ██║██║  ██║██╔══╝  ██╔══██╗██╔═══╝ ██║
+               ███████║██║     ██║██████╔╝███████╗██║  ██║██║     ██║
+               ╚══════╝╚═╝     ╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝{C.RESET}
+{C.CYAN}           SpiderPi Recon Tool  ·  Powered by Antigravity 2.0{C.RESET}
+{C.DIM}            Modelo: {ANTIGRAVITY_MODEL}  ·  Logs: {LOG_DIR.resolve()}{C.RESET}
 """)
 
 def print_menu():

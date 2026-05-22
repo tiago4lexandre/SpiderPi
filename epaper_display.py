@@ -77,7 +77,7 @@ def build_image(tool: str, target: str, analysis: str) -> Image.Image:
 
     # Cabeçalho
     draw.rectangle([0, 0, H, 14], fill=0)
-    draw.text((4, 2), f"PI RECON  ·  {datetime.now().strftime('%H:%M')}", font=font_title, fill=255)
+    draw.text((4, 2), f"SPIDER PI  ·  {datetime.now().strftime('%H:%M')}", font=font_title, fill=255)
     y = 17
 
     # Ferramenta e alvo
@@ -123,7 +123,7 @@ def build_image(tool: str, target: str, analysis: str) -> Image.Image:
 
     # Rodapé
     draw.line([(0, W - 11), (H, W - 11)], fill=0, width=1)
-    draw.text((2, W - 10), "Log salvo  ·  Pi Recon", font=font_small, fill=0)
+    draw.text((2, W - 10), "Log salvo  ·  SpiderPi", font=font_small, fill=0)
 
     return img
 
@@ -170,7 +170,7 @@ def show_boot_screen():
         font_small = get_font(9)
 
         draw.rectangle([0, 0, H, W], fill=0)
-        draw.text((10, 20), "PI RECON", font=font_big, fill=255)
+        draw.text((10, 20), "SPIDER PI", font=font_big, fill=255)
         draw.text((10, 42), "Powered by Antigravity 2.0", font=font_small, fill=255)
         draw.text((10, 54), datetime.now().strftime("%d/%m/%Y %H:%M"), font=font_small, fill=255)
         draw.text((10, 68), "SSH pronto. Aguardando...", font=font_small, fill=255)

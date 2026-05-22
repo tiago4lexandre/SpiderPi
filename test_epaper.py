@@ -10,29 +10,55 @@ import time
 import subprocess
 
 # Adiciona o caminho de instalação padrão ao path do Python como fallback
-sys.path.append("/opt/pi_recon")
+sys.path.append("/opt/spiderpi")
+
+class C:
+    RED    = "\033[91m"
+    GREEN  = "\033[92m"
+    YELLOW = "\033[93m"
+    CYAN   = "\033[96m"
+    RESET  = "\033[0m"
+    BOLD   = "\033[1m"
 
 def check_dependencies():
-    print("── Verificando dependências do sistema ──")
+    print(f"{C.BOLD}── Verificando dependências do sistema ──{C.RESET}")
     
     # 1. Verifica SPI habilitado
     if os.path.exists("/dev/spidev0.0"):
-        print("[OK] Interface SPI detectada (/dev/spidev0.0).")
+        print(f"[{C.GREEN}OK{C.RESET}] Interface SPI detectada (/dev/spidev0.0).")
     else:
-        print("[ERRO] Interface SPI NÃO detectada!")
-        print("      Execute 'sudo raspi-config', vá em 'Interface Options' e habilite 'SPI'.")
+        print(f"[{C.RED}ERRO{C.RESET}] Interface SPI NÃO detectada!")
+        print(f"      Deseja habilitar o SPI agora? (Requer ROOT e REBOOT) (s/n)")
+        if input("> ").lower() == 's':
+            config_files = ["/boot/config.txt", "/boot/firmware/config.txt"]
+            enabled = False
+            for cfg in config_files:
+                if os.path.exists(cfg):
+                    try:
+                        with open(cfg, "a") as f:
+                            f.write("\ndtparam=spi=on\n")
+                        print(f"[{C.GREEN}OK{C.RESET}] SPI habilitado em {cfg}.")
+                        enabled = True
+                    except PermissionError:
+                        print(f"[{C.RED}FALHA{C.RESET}] Sem permissão para editar {cfg}. Use 'sudo'.")
+            if enabled:
+                print(f"\n{C.YELLOW}[!!!] ATENÇÃO: Reinicie o Raspberry Pi para ativar o hardware!{C.RESET}")
+                print(f"      Execute: {C.BOLD}sudo reboot{C.RESET}")
+                sys.exit(0)
+        else:
+            print("      Habilite manualmente via 'sudo raspi-config' ou editando o config.txt.")
     
     # 2. Verifica pacotes Python
-    packages = ["PIL", "RPi.GPIO", "spidev"]
+    packages = ["PIL", "lgpio", "spidev"]
     for pkg in packages:
         try:
             if pkg == "PIL":
                 from PIL import Image
             else:
                 __import__(pkg)
-            print(f"[OK] Biblioteca Python '{pkg}' encontrada.")
+            print(f"[{C.GREEN}OK{C.RESET}] Biblioteca Python '{pkg}' encontrada.")
         except ImportError:
-            print(f"[FALHA] Biblioteca Python '{pkg}' NÃO encontrada.")
+            print(f"[{C.RED}FALHA{C.RESET}] Biblioteca Python '{pkg}' NÃO encontrada.")
             print(f"       Execute: pip install {pkg.lower() if pkg != 'PIL' else 'Pillow'}")
 
     # 3. Verifica Driver Waveshare

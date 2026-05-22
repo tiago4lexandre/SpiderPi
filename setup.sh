@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup.sh — Instalação do Pi Recon no Raspberry Pi Zero 2W
+# setup.sh — Instalação do SpiderPi no Raspberry Pi Zero 2W
 # Uso: chmod +x setup.sh && sudo ./setup.sh
 
 set -e
@@ -23,7 +23,7 @@ fi
 
 echo ""
 echo "════════════════════════════════════════"
-echo "   PI RECON — Setup & Instalação"
+echo "   SPIDER PI — Setup & Instalação"
 echo "   Raspberry Pi Zero 2W"
 echo "════════════════════════════════════════"
 echo ""
@@ -68,7 +68,8 @@ APT_PACKAGES=(
     "nmap" "nikto" "gobuster" "bettercap" "aircrack-ng" "wordlists"
     "python3-pip" "python3-venv" "python3-dev" "git" "fonts-dejavu"
     "libjpeg-dev" "zlib1g-dev" "libfreetype6-dev"
-    "python3-spidev" "python3-rpi.gpio" "python3-gpiozero" "python3-lgpio"
+    "python3-spidev" "python3-rpi.gpio" "python3-gpiozero"
+    "wget" "unzip" "make" "gcc" "swig" # Para compilar liblgpio
 )
 
 for pkg in "${APT_PACKAGES[@]}"; do
@@ -79,6 +80,43 @@ for pkg in "${APT_PACKAGES[@]}"; do
         apt-get install -y -qq "$pkg" || warn "Falha ao instalar $pkg."
     fi
 done
+
+# ── Habilitar SPI ─────────────────────────────────────────────────────────────
+step "Configurando Hardware (SPI)"
+CONFIG_FILES=("/boot/config.txt" "/boot/firmware/config.txt")
+SPI_ENABLED=false
+
+for cfg in "${CONFIG_FILES[@]}"; do
+    if [ -f "$cfg" ]; then
+        if grep -q "^dtparam=spi=on" "$cfg"; then
+            log "SPI já habilitado em $cfg"
+            SPI_ENABLED=true
+        else
+            log "Habilitando SPI em $cfg..."
+            echo "dtparam=spi=on" >> "$cfg"
+            SPI_ENABLED=true
+        fi
+    fi
+done
+[ "$SPI_ENABLED" = false ] && warn "Arquivo de configuração de boot não encontrado. Habilite SPI manualmente."
+
+# ── Compilar liblgpio ─────────────────────────────────────────────────────────
+step "Instalando liblgpio (Nativo)"
+if [ ! -f /usr/local/include/lgpio.h ]; then
+    log "Baixando e compilando liblgpio..."
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR"
+    wget -q https://github.com/joan2937/lg/archive/master.zip -O lg.zip
+    unzip -q lg.zip
+    cd lg-master
+    make -s
+    make install -s
+    cd - > /dev/null
+    rm -rf "$TEMP_DIR"
+    log "liblgpio instalada com sucesso."
+else
+    log "liblgpio já está instalada."
+fi
 
 # Configura permissões para o usuário atual (se não for root)
 CURRENT_USER=$(logname 2>/dev/null || echo $SUDO_USER)
@@ -98,7 +136,7 @@ fi
 # ════════════════════════════════════════════════════════
 step "Configurando Ambiente Virtual Python"
 
-VENV_PATH="/opt/pi_recon_env"
+VENV_PATH="/opt/spiderpi_env"
 if [ ! -d "$VENV_PATH" ]; then
     python3 -m venv "$VENV_PATH"
 fi
@@ -107,8 +145,10 @@ PIP="$VENV_PATH/bin/pip"
 $PIP install --upgrade pip -q
 
 log "Instalando dependências Python no venv..."
-# rpi-lgpio é o segredo para evitar o erro 'Failed to add edge detection' em kernels novos
-$PIP install google-genai Pillow RPi.GPIO spidev gpiozero rpi-lgpio -q
+# No Python 3.13+, RPi.GPIO falha no edge detection.
+# Usamos rpi-lgpio como shim de compatibilidade sobre a liblgpio compilada.
+$PIP uninstall RPi.GPIO -y -q 2>/dev/null || true
+$PIP install google-genai Pillow spidev gpiozero lgpio rpi-lgpio -q
 
 # ════════════════════════════════════════════════════════
 # 4. DRIVER WAVESHARE E-PAPER
@@ -165,43 +205,43 @@ else
 fi
 
 # ════════════════════════════════════════════════════════
-# 5. ARQUIVOS DO PI RECON
+# 5. ARQUIVOS DO SPIDER PI
 # ════════════════════════════════════════════════════════
-step "Instalando Pi Recon"
+step "Instalando SpiderPi"
 
-mkdir -p /opt/pi_recon/logs
-chmod 777 /opt/pi_recon/logs
-chmod 755 /opt/pi_recon
+mkdir -p /opt/spiderpi/logs
+chmod 777 /opt/spiderpi/logs
+chmod 755 /opt/spiderpi
 
 for f in scanner.py epaper_display.py test_epaper.py; do
     if [ -f "./$f" ]; then
-        cp "./$f" /opt/pi_recon/
+        cp "./$f" /opt/spiderpi/
         log "$f copiado."
     else
         warn "$f não encontrado no diretório atual."
     fi
 done
 
-# ── Comando global pirecon ────────────────────────────────────────────────────
-cat > /usr/local/bin/pirecon << 'EOF'
+# ── Comando global spiderpi ────────────────────────────────────────────────────
+cat > /usr/local/bin/spiderpi << 'EOF'
 #!/bin/bash
-cd /opt/pi_recon
-source /opt/pi_recon_env/bin/activate
+cd /opt/spiderpi
+source /opt/spiderpi_env/bin/activate
 exec python3 scanner.py "$@"
 EOF
-chmod +x /usr/local/bin/pirecon
-log "Comando 'pirecon' criado em /usr/local/bin/"
+chmod +x /usr/local/bin/spiderpi
+log "Comando 'spiderpi' criado em /usr/local/bin/"
 
 # ── Serviço systemd (boot screen no e-paper) ─────────────────────────────────
-cat > /etc/systemd/system/pirecon-boot.service << 'EOF'
+cat > /etc/systemd/system/spiderpi-boot.service << 'EOF'
 [Unit]
-Description=Pi Recon Boot Screen (e-paper)
+Description=SpiderPi Boot Screen (e-paper)
 After=network.target
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/pi_recon
-ExecStart=/opt/pi_recon_env/bin/python3 -c "import epaper_display; epaper_display.show_boot_screen()"
+WorkingDirectory=/opt/spiderpi
+ExecStart=/opt/spiderpi_env/bin/python3 -c "import epaper_display; epaper_display.show_boot_screen()"
 RemainAfterExit=yes
 
 [Install]
@@ -209,28 +249,38 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable pirecon-boot.service 2>/dev/null || true
+systemctl enable spiderpi-boot.service 2>/dev/null || true
 log "Serviço de boot screen configurado."
 
 # ════════════════════════════════════════════════════════
 # 6. RESUMO FINAL
 # ════════════════════════════════════════════════════════
 echo ""
-echo "════════════════════════════════════════"
-echo "   ✓ Instalação concluída!"
-echo "════════════════════════════════════════"
+echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}   ✓ INSTALAÇÃO DO SPIDERPI CONCLUÍDA!${NC}"
+echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 echo ""
-echo "  Swap ativo : $(free -h | grep Swap | awk '{print $2}')"
-echo "  Python venv: /opt/pi_recon_env"
-echo "  Arquivos   : /opt/pi_recon/"
-echo "  Logs       : /opt/pi_recon/logs/"
+echo -e "${CYAN}1. CONFIGURAÇÃO DA API KEY (OBRIGATÓRIO)${NC}"
+echo "   Para que a análise do Antigravity funcione, você precisa de uma chave gratuita."
+echo "   Obtenha em: https://aistudio.google.com/app/apikey"
 echo ""
-echo "Próximo passo — configure sua API Key e execute o diagnóstico:"
+echo "   Para configurar permanentemente (recomendado):"
+echo -e "   ${YELLOW}echo 'export GEMINI_API_KEY=\"sua_chave_aqui\"' >> ~/.zshrc${NC} (se usar Kali)"
+echo -e "   ${YELLOW}echo 'export GEMINI_API_KEY=\"sua_chave_aqui\"' >> ~/.bashrc${NC} (se usar Raspberry Pi OS)"
+echo "   Em seguida, rode: source ~/.zshrc$ (ou .bashrc)"
 echo ""
-echo "  sudo ./test_epaper.py"
+echo -e "${CYAN}2. TESTE DE HARDWARE${NC}"
+echo "   Antes de iniciar, verifique se o display e o SPI estão funcionando:"
+echo -e "   ${YELLOW}sudo spiderpi_env/bin/python3 test_epaper.py${NC}"
+echo "   (Siga as instruções na tela para habilitar SPI se necessário e reiniciar)"
 echo ""
-echo "Para iniciar:"
-echo "  pirecon"
+echo -e "${CYAN}3. INICIAR O SPIDERPI${NC}"
+echo "   Simplesmente digite:"
+echo -e "   ${GREEN}spiderpi${NC}"
 echo ""
-warn "Use apenas em redes com autorização explícita."
+echo "   Para scans que exigem root (ex: Bettercap):"
+echo -e "   ${GREEN}sudo -E spiderpi${NC}"
+echo ""
+echo -e "${RED}⚠ AVISO: Use apenas em redes com autorização explícita.${NC}"
+echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"
 echo ""
