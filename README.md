@@ -1,6 +1,26 @@
+<!-- ===================================== -->
+<!--        SPIDERPI RECON PLATFORM        -->
+<!-- ===================================== -->
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Platform-Raspberry%20Pi%20Zero%202W-black?style=for-the-badge">
+  <img src="https://img.shields.io/badge/AI-Antigravity%202.0%20%7C%20Gemini%203.5%20Flash-blue?style=for-the-badge">
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Focus-Reconnaissance%20%7C%20Threat%20Analysis-red?style=flat-square">
+  <img src="https://img.shields.io/badge/Discipline-Offensive%20Security-purple?style=flat-square">
+  <img src="https://img.shields.io/badge/Hardware-Waveshare%20E--Paper-green?style=flat-square">
+  <img src="https://img.shields.io/badge/Level-Intermediate%20%E2%86%92%20Advanced-yellow?style=flat-square">
+</p>
+
+---
+
 # SpiderPi 🕷️ — Powered by Antigravity 2.0
 **Ferramenta de reconhecimento de segurança com análise via Antigravity AI (Gemini 3.5 Flash)**
 Para Raspberry Pi Zero 2W com display Waveshare e-paper
+
+![](assets/spiderpi.png)
 
 ---
 
@@ -61,6 +81,8 @@ O script verificará:
 - Se os drivers específicos da Waveshare foram baixados corretamente.
 - Permite realizar um teste de desenho (flash) na tela.
 
+![](assets/display.jpeg)
+
 ---
 
 ## Configuração do E-Paper
@@ -114,6 +136,8 @@ PRÓXIMOS PASSOS:
 
 RISCO GERAL: Crítico
 ```
+
+![](assets/resposta.png)
 
 ---
 
