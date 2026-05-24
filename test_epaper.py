@@ -64,24 +64,31 @@ def check_dependencies():
     # 3. Verifica Driver Waveshare
     print("\n── Verificando drivers Waveshare ──")
     try:
+        # Tenta importar o módulo local
         import epaper_display
         print(f"[INFO] Modelo configurado em epaper_display.py: {epaper_display.DISPLAY_MODEL}")
         
-        from waveshare_epd import epdconfig
-        print("[OK] Configuração base (epdconfig) importada.")
+        # Tenta importar a base, capturando erro de hardware ocupado
+        try:
+            from waveshare_epd import epdconfig
+            print("[OK] Configuração base (epdconfig) importada.")
+        except Exception as e:
+            print(f"[{C.RED}AVISO{C.RESET}] Falha ao acessar hardware via epdconfig: {e}")
+            print("        Isso geralmente significa que os pinos GPIO já estão em uso.")
+            print("        Tente: sudo systemctl stop spiderpi-boot.service")
         
         # Tenta importar o driver específico
         try:
             module_name = f"waveshare_epd.{epaper_display.DISPLAY_MODEL}"
             __import__(module_name)
             print(f"[OK] Driver específico '{module_name}' importado com sucesso.")
-        except ImportError:
-            print(f"[ERRO] Driver '{epaper_display.DISPLAY_MODEL}' não encontrado em 'waveshare_epd'.")
-            print("       Verifique se você baixou os arquivos .py do modelo correto.")
+        except Exception as e:
+            print(f"[{C.RED}FALHA{C.RESET}] Erro ao carregar driver específico: {e}")
             
     except ImportError as e:
-        print(f"[ERRO] Falha ao importar módulos: {e}")
-        print("       Certifique-se de que a pasta 'waveshare_epd' existe ou o driver foi instalado via pip.")
+        print(f"[{C.RED}ERRO{C.RESET}] Módulo epaper_display.py não encontrado no diretório atual.")
+    except Exception as e:
+        print(f"[{C.RED}ERRO{C.RESET}] Erro inesperado: {e}")
 
 def run_test_draw():
     print("\n── Iniciando teste de renderização ──")

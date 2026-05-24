@@ -34,15 +34,16 @@ try:
     waveshare_module = importlib.import_module(f"waveshare_epd.{DISPLAY_MODEL}")
     epd_driver = waveshare_module
     DRIVER_OK = True
-except ImportError:
-    pass
+except Exception as e:
+    # Captura tanto ImportError quanto erros de hardware (GPIO busy) no import
+    DRIVER_OK = False
 
 # Fallback: Caso o usuário tenha instalado via pip e o nome seja diferente ou direto
 if not DRIVER_OK:
     try:
         from waveshare_epd import epd2in13_V4 as epd_driver
         DRIVER_OK = True
-    except ImportError:
+    except Exception:
         pass
 
 # Dimensões padrão por modelo (largura x altura em pixels)
@@ -140,19 +141,26 @@ def show_scan_result(tool: str, target: str, analysis: str):
         epd.init()
         epd.Clear(0xFF)
 
-
         img = build_image(tool, target, analysis)
 
         # Rotaciona para landscape
         img = img.rotate(90, expand=True)
 
         epd.display(epd.getbuffer(img))
-        time.sleep(2)
-        epd.sleep()
-
         print("[e-paper] Display atualizado com sucesso.")
+
     except Exception as e:
         print(f"[e-paper] Erro ao atualizar display: {e}")
+    finally:
+        if DRIVER_OK:
+            try:
+                if 'epd' in locals():
+                    epd.sleep()
+                # Libera os pinos GPIO para evitar "GPIO busy"
+                if hasattr(epd_driver, 'epdconfig'):
+                    epd_driver.epdconfig.module_exit()
+            except:
+                pass
 
 # ── Tela de boot ──────────────────────────────────────────────────────────────
 def show_boot_screen():
@@ -177,9 +185,17 @@ def show_boot_screen():
 
         img = img.rotate(90, expand=True)
         epd.display(epd.getbuffer(img))
-        epd.sleep()
     except Exception as e:
         print(f"[e-paper] Boot screen erro: {e}")
+    finally:
+        if DRIVER_OK:
+            try:
+                if 'epd' in locals():
+                    epd.sleep()
+                if hasattr(epd_driver, 'epdconfig'):
+                    epd_driver.epdconfig.module_exit()
+            except:
+                pass
 
 if __name__ == "__main__":
     # Teste rápido

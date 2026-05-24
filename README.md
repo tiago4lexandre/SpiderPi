@@ -31,6 +31,7 @@ spiderpi/
 ├── scanner.py          # Script principal — menu e integração Antigravity
 ├── epaper_display.py   # Driver do display Waveshare (v2.0)
 ├── setup.sh            # Instalação automatizada
+├── KALI_INSTALL.md     # Guia de instalação do Kali Linux (Headless)
 ├── logs/               # JSONs com histórico de scans
 └── README.md
 ```
@@ -38,6 +39,8 @@ spiderpi/
 ---
 
 ## Instalação Rápida
+
+Se você ainda não tem o Kali Linux instalado no seu Pi Zero 2W, siga o nosso **[Guia de Instalação do Kali Linux (Headless)](KALI_INSTALL.md)** antes de prosseguir.
 
 ```bash
 # 1. Clone ou copie os arquivos para o Pi
