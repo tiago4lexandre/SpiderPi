@@ -16,7 +16,7 @@
 
 ---
 
-# SpiderPi 🕷️ v2.1.0 — Antigravity 2.1
+# SpiderPi 🕷️ v2.2.0 — Antigravity 2.1
 **Plataforma de reconhecimento automatizada com análise via Gemini 3.5 Flash**
 Para Raspberry Pi Zero 2W com display Waveshare e-paper
 
@@ -48,9 +48,8 @@ spiderpi/
 
 Para facilitar a navegação, o projeto está dividido nos seguintes guias:
 
-1.  **[Guia de Instalação (KALI_INSTALL.md)](KALI_INSTALL.md)**: Como preparar o Raspberry Pi Zero 2W com Kali Linux Headless.
-2.  **[Guia de Uso (USAGE.md)](USAGE.md)**: Detalhes sobre os comandos CLI, flags de automação e o Dashboard Web.
-3.  **[Release Notes (CHANGELOG.md)](CHANGELOG.md)**: O que há de novo na versão v2.1.0.
+1.  **[Guia de Instalação](KALI_INSTALL.md)**: Como preparar o Raspberry Pi Zero 2W com Kali Linux Headless.
+2.  **[Guia de Uso](USAGE.md)**: Detalhes sobre os comandos CLI, flags de automação e o Dashboard Web.
 
 ---
 
@@ -86,6 +85,8 @@ O SpiderPi possui um painel de controle que inicia **automaticamente** em backgr
 - **Análise Inteligente:** Visualize as vulnerabilidades encontradas pela IA Antigravity 2.1.
 - **Estatísticas:** Acompanhe CPU, Temperatura e RAM do dispositivo em tempo real.
 - **Acesse:** `http://raspberrypi.local:5000` (ou o IP do seu dispositivo)
+
+![](assets/dashboard.png)
 
 ---
 

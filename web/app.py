@@ -87,6 +87,18 @@ def stream_output(process):
     process.wait()
     socketio.emit('terminal_output', {'line': '\n--- SCAN FINALIZADO ---'})
 
+@app.route('/api/logs/<filename>', methods=['DELETE'])
+def delete_log(filename):
+    file_path = LOG_DIR / filename
+    if not file_path.exists():
+        abort(404)
+    
+    try:
+        file_path.unlink()
+        return jsonify({"status": "Log deletado com sucesso", "filename": filename})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/scan', methods=['POST'])
 def run_scan():
     data = request.json

@@ -9,87 +9,89 @@
 </head>
 <body>
     <header>
-        <h1>SPIDER PI // RECON_UNIT</h1>
-        <div id="status-indicator">ONLINE</div>
+        <h1>SpiderPi // Recon_Unit</h1>
+        <div id="status-indicator">SYSTEM_ONLINE</div>
     </header>
 
     <div class="container">
         <!-- Telemetria -->
         <section class="stats-grid">
             <div class="stat-card">
-                <h3>CPU</h3>
+                <h3>CPU_LOAD</h3>
                 <div id="cpu-val" class="value">--%</div>
             </div>
             <div class="stat-card">
-                <h3>RAM</h3>
+                <h3>RAM_USAGE</h3>
                 <div id="ram-val" class="value">--%</div>
             </div>
             <div class="stat-card">
-                <h3>TEMP</h3>
+                <h3>CORE_TEMP</h3>
                 <div id="temp-val" class="value">--°C</div>
             </div>
             <div class="stat-card">
-                <h3>DISK</h3>
+                <h3>DISK_SPACE</h3>
                 <div id="disk-val" class="value">--%</div>
             </div>
         </section>
 
         <!-- Controle Remoto -->
         <section class="controls">
-            <h2>CONTROLE_REMOTO</h2>
+            <h2>Remote_Control_Interface</h2>
             <div class="form-group">
                 <select id="scan-tool">
-                    <option value="nmap">NMAP (Serviços)</option>
+                    <option value="nmap">NMAP (Network Services)</option>
                     <option value="nikto">NIKTO (Web Vuln)</option>
-                    <option value="gobuster">GOBUSTER (Diretórios)</option>
+                    <option value="gobuster">GOBUSTER (Directories)</option>
                     <option value="bettercap">BETTERCAP (WiFi Recon)</option>
                 </select>
-                <input type="text" id="scan-target" placeholder="IP, Host ou URL" required>
-                <button id="btn-scan" onclick="runScan()">EXECUTAR SCAN</button>
+                <input type="text" id="scan-target" placeholder="Target IP, Host or URL" required>
+                <button id="btn-scan" class="primary" onclick="runScan()">EXECUTE_SCAN</button>
             </div>
-            <div id="scan-msg" style="margin-top: 10px; font-size: 0.8rem;"></div>
+            <div id="scan-msg" style="margin-top: 10px; font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-muted);"></div>
         </section>
 
         <!-- Terminal em Tempo Real -->
         <section class="terminal-container">
             <div class="terminal-header">
-                <span>LIVE_TERMINAL_FEED</span>
-                <span id="terminal-status" style="color: var(--warning-color);">STANDBY</span>
+                <span>Live_Terminal_Feed</span>
+                <span id="terminal-status" style="color: var(--high);">IDLE</span>
             </div>
-            <div id="terminal-console">Aguardando comando...</div>
+            <div id="terminal-console">Waiting for command initiation...</div>
         </section>
 
         <!-- Histórico de Logs -->
         <section>
-            <h2>HISTÓRICO_DE_SCANS</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>DATA/HORA</th>
-                        <th>ALVO</th>
-                        <th>FERRAMENTA</th>
-                        <th>RISCO</th>
-                        <th>AÇÕES</th>
-                    </tr>
-                </thead>
-                <tbody id="logs-table-body">
-                    <!-- Preenchido via JS -->
-                </tbody>
-            </table>
+            <div class="section-label">Scan_History_Archive</div>
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Target_Node</th>
+                            <th>Tool_Module</th>
+                            <th>Risk_Level</th>
+                            <th>Operations</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logs-table-body">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
+            </div>
         </section>
     </div>
 
     <!-- Visualizador de Log -->
     <div id="log-viewer">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeLog()">&times;</span>
-            <h2 id="log-title" style="color: var(--secondary-color);">LOG_DETAIL</h2>
-            <div id="log-info" style="font-size: 0.8rem; margin-bottom: 1rem;"></div>
+            <button class="close-btn" onclick="closeLog()">&times;</button>
+            <h2 id="log-title">LOG_ENTRY_DETAIL</h2>
+            <div id="log-info" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); margin-bottom: 1.5rem; text-transform: uppercase;"></div>
             
-            <h3>ANÁLISE_ANTIGRAVITY</h3>
+            <div class="section-label">Antigravity_AI_Analysis</div>
             <div id="log-analysis" class="analysis-box"></div>
 
-            <h3>OUTPUT_BRUTO</h3>
+            <div class="section-label" style="margin-top: 1.5rem;">Raw_Tool_Output</div>
             <pre id="log-raw"></pre>
         </div>
     </div>
@@ -101,15 +103,15 @@
 
         // Recebe saída do terminal via SocketIO
         socket.on('terminal_output', function(msg) {
-            if (consoleElem.innerText === 'Aguardando comando...') {
+            if (consoleElem.innerText.includes('Waiting for command')) {
                 consoleElem.innerText = '';
             }
             consoleElem.innerText += msg.line;
             consoleElem.scrollTop = consoleElem.scrollHeight;
             
             if (msg.line.includes('--- SCAN FINALIZADO ---')) {
-                terminalStatus.innerText = 'FINALIZADO';
-                terminalStatus.style.color = 'var(--primary-color)';
+                terminalStatus.innerText = 'COMPLETED';
+                terminalStatus.style.color = 'var(--low)';
                 document.getElementById('btn-scan').disabled = false;
                 loadLogs();
             }
@@ -138,11 +140,14 @@
                         const tr = document.createElement('tr');
                         const riskClass = 'badge-' + log.risk.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                         tr.innerHTML = `
-                            <td>${log.timestamp}</td>
-                            <td>${log.target}</td>
-                            <td>${log.tool}</td>
+                            <td><span style="font-family: var(--font-mono); opacity: 0.7;">${log.timestamp}</span></td>
+                            <td><span class="ip">${log.target}</span></td>
+                            <td><span style="font-family: var(--font-mono); font-weight: 500;">${log.tool}</span></td>
                             <td><span class="badge ${riskClass}">${log.risk}</span></td>
-                            <td><button onclick="viewLog('${log.filename}')">VER</button></td>
+                            <td style="display: flex; gap: 8px;">
+                                <button onclick="viewLog('${log.filename}')">OPEN</button>
+                                <button class="btn-delete" onclick="deleteLog('${log.filename}')">PURGE</button>
+                            </td>
                         `;
                         tbody.appendChild(tr);
                     });
@@ -154,8 +159,8 @@
             fetch('/api/logs/' + filename)
                 .then(r => r.json())
                 .then(data => {
-                    document.getElementById('log-title').innerText = `LOG: ${data.tool.toUpperCase()} @ ${data.target}`;
-                    document.getElementById('log-info').innerText = `Executado em: ${data.timestamp} | Modelo: ${data.antigravity_model}`;
+                    document.getElementById('log-title').innerText = `// ARCHIVE: ${data.tool.toUpperCase()} :: ${data.target}`;
+                    document.getElementById('log-info').innerText = `TIMESTAMP: ${data.timestamp} | CORE: ${data.antigravity_model}`;
                     document.getElementById('log-analysis').innerText = data.antigravity_analysis;
                     document.getElementById('log-raw').innerText = data.raw_output;
                     document.getElementById('log-viewer').style.display = 'block';
@@ -166,6 +171,21 @@
             document.getElementById('log-viewer').style.display = 'none';
         }
 
+        // Deleta um log
+        function deleteLog(filename) {
+            if (!confirm('ARCHIVE PURGE: Permanently delete this log entry?')) return;
+
+            fetch('/api/logs/' + filename, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) {
+                        alert('ERROR: ' + data.error);
+                    } else {
+                        loadLogs();
+                    }
+                });
+        }
+
         // Executa novo scan
         function runScan() {
             const tool = document.getElementById('scan-tool').value;
@@ -173,18 +193,17 @@
             const msg = document.getElementById('scan-msg');
 
             if (!target) {
-                alert('Informe um alvo!');
+                alert('Target node identifier required.');
                 return;
             }
 
             // Limpa terminal
-            consoleElem.innerText = `[*] Iniciando scan de ${tool} em ${target}...\n`;
-            terminalStatus.innerText = 'EXECUTANDO';
-            terminalStatus.style.color = 'var(--secondary-color)';
+            consoleElem.innerText = `[*] INITIALIZING: ${tool} module targeting ${target}...\n`;
+            terminalStatus.innerText = 'EXECUTING';
+            terminalStatus.style.color = 'var(--high)';
             document.getElementById('btn-scan').disabled = true;
 
-            msg.innerText = '[*] Comando enviado. Acompanhe o terminal abaixo.';
-            msg.style.color = 'var(--secondary-color)';
+            msg.innerText = '// Command dispatched. Monitoring feed...';
 
             fetch('/api/scan', {
                 method: 'POST',
@@ -194,10 +213,9 @@
             .then(r => r.json())
             .then(data => {
                 if (data.error) {
-                    msg.innerText = '[!] ERRO: ' + data.error;
-                    msg.style.color = 'var(--danger-color)';
-                    terminalStatus.innerText = 'ERRO';
-                    terminalStatus.style.color = 'var(--danger-color)';
+                    msg.innerText = '// ERROR: ' + data.error;
+                    terminalStatus.innerText = 'FAULT';
+                    terminalStatus.style.color = 'var(--critical)';
                     document.getElementById('btn-scan').disabled = false;
                 }
             });

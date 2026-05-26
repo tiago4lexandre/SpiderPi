@@ -1,0 +1,19 @@
+button.primary:hover {
+    background: #6aa0f8;
+    border-color: #6aa0f8;
+    color: #fff;
+}
+
+button.btn-delete {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-muted);
+}
+
+button.btn-delete:hover {
+    background: var(--critical-dim);
+    border-color: var(--critical);
+    color: var(--critical);
+}
+
+/* ─── Table ─────────────────────────────────────────────────────── */
