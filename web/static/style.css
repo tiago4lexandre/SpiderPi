@@ -1,0 +1,189 @@
+:root {
+    --bg-color: #0a0a0a;
+    --card-bg: #151515;
+    --primary-color: #00ff41; /* Matrix Green */
+    --secondary-color: #00d4ff; /* Cyber Cyan */
+    --text-color: #e0e0e0;
+    --danger-color: #ff003c;
+    --warning-color: #f39c12;
+    --success-color: #2ecc71;
+}
+
+body {
+    font-family: 'Courier New', Courier, monospace;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    background-color: #000;
+    padding: 1rem;
+    border-bottom: 2px solid var(--primary-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 0 10px var(--primary-color);
+}
+
+header h1 {
+    margin: 0;
+    color: var(--primary-color);
+    font-size: 1.5rem;
+}
+
+.container {
+    padding: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* Stats Section */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background-color: var(--card-bg);
+    padding: 1rem;
+    border-left: 4px solid var(--secondary-color);
+    border-radius: 4px;
+}
+
+.stat-card h3 {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--secondary-color);
+    text-transform: uppercase;
+}
+
+.stat-card .value {
+    font-size: 1.8rem;
+    font-weight: bold;
+    margin-top: 0.5rem;
+}
+
+/* Controls */
+.controls {
+    background-color: var(--card-bg);
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    border: 1px solid #333;
+}
+
+.form-group {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+input, select, button {
+    background: #000;
+    border: 1px solid var(--primary-color);
+    color: var(--text-color);
+    padding: 0.5rem;
+    font-family: inherit;
+}
+
+button {
+    cursor: pointer;
+    background-color: #002200;
+    color: var(--primary-color);
+    font-weight: bold;
+    transition: 0.3s;
+}
+
+button:hover {
+    background-color: var(--primary-color);
+    color: #000;
+    box-shadow: 0 0 15px var(--primary-color);
+}
+
+/* Logs Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: var(--card-bg);
+}
+
+th, td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #333;
+}
+
+th {
+    color: var(--secondary-color);
+    text-transform: uppercase;
+    font-size: 0.8rem;
+}
+
+tr:hover {
+    background-color: #1a1a1a;
+}
+
+.badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: bold;
+}
+
+.badge-critico { background-color: var(--danger-color); color: white; }
+.badge-alto { background-color: var(--warning-color); color: black; }
+.badge-medio { background-color: var(--success-color); color: black; }
+.badge-baixo { background-color: #34495e; color: white; }
+
+/* Log Viewer Modal/Overlay */
+#log-viewer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    display: none;
+    z-index: 1000;
+    padding: 2rem;
+    overflow-y: auto;
+}
+
+.modal-content {
+    background: #111;
+    border: 1px solid var(--secondary-color);
+    padding: 1.5rem;
+    max-width: 900px;
+    margin: 0 auto;
+    border-radius: 8px;
+}
+
+pre {
+    background: #000;
+    padding: 1rem;
+    overflow-x: auto;
+    border: 1px solid #222;
+    font-size: 0.85rem;
+    color: #aaa;
+}
+
+.analysis-box {
+    background: #1a1a2e;
+    border: 1px solid var(--secondary-color);
+    padding: 1rem;
+    margin-top: 1rem;
+    color: var(--secondary-color);
+    white-space: pre-wrap;
+}
+
+.close-btn {
+    float: right;
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: var(--danger-color);
+}

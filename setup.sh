@@ -148,7 +148,7 @@ log "Instalando dependências Python no venv..."
 # No Python 3.13+, RPi.GPIO falha no edge detection.
 # Usamos rpi-lgpio como shim de compatibilidade sobre a liblgpio compilada.
 $PIP uninstall RPi.GPIO -y -q 2>/dev/null || true
-$PIP install google-genai Pillow spidev gpiozero lgpio rpi-lgpio -q
+$PIP install google-genai Pillow spidev gpiozero lgpio rpi-lgpio flask psutil -q
 
 # ════════════════════════════════════════════════════════
 # 4. DRIVER WAVESHARE E-PAPER
@@ -222,6 +222,11 @@ for f in scanner.py epaper_display.py test_epaper.py; do
     fi
 done
 
+if [ -d "./web" ]; then
+    cp -r "./web" /opt/spiderpi/
+    log "Interface Web copiada."
+fi
+
 # ── Comando global spiderpi ────────────────────────────────────────────────────
 cat > /usr/local/bin/spiderpi << 'EOF'
 #!/bin/bash
@@ -230,7 +235,7 @@ source /opt/spiderpi_env/bin/activate
 exec python3 scanner.py "$@"
 EOF
 chmod +x /usr/local/bin/spiderpi
-log "Comando 'spiderpi' criado em /usr/local/bin/"
+log "Comando 'spiderpi' atualizado com suporte a argumentos em /usr/local/bin/"
 
 # ── Serviço systemd (boot screen no e-paper) ─────────────────────────────────
 cat > /etc/systemd/system/spiderpi-boot.service << 'EOF'
@@ -252,6 +257,48 @@ systemctl daemon-reload
 systemctl enable spiderpi-boot.service 2>/dev/null || true
 log "Serviço de boot screen configurado."
 
+# ── Serviço systemd (Web Dashboard) ──────────────────────────────────────────
+step "Configurando Serviço Web Dashboard"
+
+# Captura API Key se não estiver definida
+if [ -z "$GEMINI_API_KEY" ]; then
+    echo -e "${YELLOW}[?] GEMINI_API_KEY não detectada.${NC}"
+    read -p "Digite sua API Key do Google AI Studio (ou deixe em branco para configurar depois): " USER_KEY
+    if [ ! -z "$USER_KEY" ]; then
+        export GEMINI_API_KEY="$USER_KEY"
+    fi
+fi
+
+if [ -f /etc/systemd/system/spiderpi-web.service ]; then
+    warn "Serviço spiderpi-web já existe. Reiniciando..."
+    systemctl stop spiderpi-web.service || true
+fi
+
+cat > /etc/systemd/system/spiderpi-web.service << EOF
+[Unit]
+Description=SpiderPi Web Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/spiderpi
+ExecStart=/opt/spiderpi_env/bin/python3 web/app.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/spiderpi/logs/web.log
+StandardError=append:/opt/spiderpi/logs/web.log
+Environment="GEMINI_API_KEY=$GEMINI_API_KEY"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable spiderpi-web.service
+systemctl start spiderpi-web.service
+log "Serviço Web Dashboard configurado e iniciado em background."
+
 # ════════════════════════════════════════════════════════
 # 6. RESUMO FINAL
 # ════════════════════════════════════════════════════════
@@ -271,15 +318,18 @@ echo "   Em seguida, rode: source ~/.zshrc$ (ou .bashrc)"
 echo ""
 echo -e "${CYAN}2. TESTE DE HARDWARE${NC}"
 echo "   Antes de iniciar, verifique se o display e o SPI estão funcionando:"
-echo -e "   ${YELLOW}sudo spiderpi_env/bin/python3 test_epaper.py${NC}"
-echo "   (Siga as instruções na tela para habilitar SPI se necessário e reiniciar)"
+echo -e "   ${YELLOW}sudo /opt/spiderpi_env/bin/python3 /opt/spiderpi/test_epaper.py${NC}"
 echo ""
-echo -e "${CYAN}3. INICIAR O SPIDERPI${NC}"
+echo -e "${CYAN}3. INICIAR O SPIDERPI (CLI)${NC}"
 echo "   Simplesmente digite:"
 echo -e "   ${GREEN}spiderpi${NC}"
 echo ""
-echo "   Para scans que exigem root (ex: Bettercap):"
-echo -e "   ${GREEN}sudo -E spiderpi${NC}"
+echo -e "${CYAN}4. PAINEL WEB (DASHBOARD)${NC}"
+echo "   O dashboard já está rodando em background!"
+echo -e "   Acesse: ${GREEN}http://$(hostname).local:5000${NC} (ou o IP do dispositivo)"
+echo ""
+echo "   Para gerenciar o serviço:"
+echo -e "   ${YELLOW}sudo systemctl status spiderpi-web${NC}"
 echo ""
 echo -e "${RED}⚠ AVISO: Use apenas em redes com autorização explícita.${NC}"
 echo -e "${GREEN}════════════════════════════════════════════════════════${NC}"

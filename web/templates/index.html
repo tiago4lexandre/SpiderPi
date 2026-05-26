@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpiderPi Recon Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>SPIDER PI // RECON_UNIT</h1>
+        <div id="status-indicator">ONLINE</div>
+    </header>
+
+    <div class="container">
+        <!-- Telemetria -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <h3>CPU</h3>
+                <div id="cpu-val" class="value">--%</div>
+            </div>
+            <div class="stat-card">
+                <h3>RAM</h3>
+                <div id="ram-val" class="value">--%</div>
+            </div>
+            <div class="stat-card">
+                <h3>TEMP</h3>
+                <div id="temp-val" class="value">--°C</div>
+            </div>
+            <div class="stat-card">
+                <h3>DISK</h3>
+                <div id="disk-val" class="value">--%</div>
+            </div>
+        </section>
+
+        <!-- Controle Remoto -->
+        <section class="controls">
+            <h2>CONTROLE_REMOTO</h2>
+            <div class="form-group">
+                <select id="scan-tool">
+                    <option value="nmap">NMAP (Serviços)</option>
+                    <option value="nikto">NIKTO (Web Vuln)</option>
+                    <option value="gobuster">GOBUSTER (Diretórios)</option>
+                    <option value="bettercap">BETTERCAP (WiFi Recon)</option>
+                </select>
+                <input type="text" id="scan-target" placeholder="IP, Host ou URL" required>
+                <button onclick="runScan()">EXECUTAR SCAN</button>
+            </div>
+            <div id="scan-msg" style="margin-top: 10px; font-size: 0.8rem;"></div>
+        </section>
+
+        <!-- Histórico de Logs -->
+        <section>
+            <h2>HISTÓRICO_DE_SCANS</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>DATA/HORA</th>
+                        <th>ALVO</th>
+                        <th>FERRAMENTA</th>
+                        <th>RISCO</th>
+                        <th>AÇÕES</th>
+                    </tr>
+                </thead>
+                <tbody id="logs-table-body">
+                    <!-- Preenchido via JS -->
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <!-- Visualizador de Log -->
+    <div id="log-viewer">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeLog()">&times;</span>
+            <h2 id="log-title" style="color: var(--secondary-color);">LOG_DETAIL</h2>
+            <div id="log-info" style="font-size: 0.8rem; margin-bottom: 1rem;"></div>
+            
+            <h3>ANÁLISE_ANTIGRAVITY</h3>
+            <div id="log-analysis" class="analysis-box"></div>
+
+            <h3>OUTPUT_BRUTO</h3>
+            <pre id="log-raw"></pre>
+        </div>
+    </div>
+
+    <script>
+        // Atualiza estatísticas a cada 3 segundos
+        function updateStats() {
+            fetch('/api/stats')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('cpu-val').innerText = data.cpu_usage + '%';
+                    document.getElementById('ram-val').innerText = data.ram_usage + '%';
+                    document.getElementById('temp-val').innerText = data.temp;
+                    document.getElementById('disk-val').innerText = data.disk_usage + '%';
+                });
+        }
+
+        // Carrega lista de logs
+        function loadLogs() {
+            fetch('/api/logs')
+                .then(r => r.json())
+                .then(data => {
+                    const tbody = document.getElementById('logs-table-body');
+                    tbody.innerHTML = '';
+                    data.forEach(log => {
+                        const tr = document.createElement('tr');
+                        const riskClass = 'badge-' + log.risk.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                        tr.innerHTML = `
+                            <td>${log.timestamp}</td>
+                            <td>${log.target}</td>
+                            <td>${log.tool}</td>
+                            <td><span class="badge ${riskClass}">${log.risk}</span></td>
+                            <td><button onclick="viewLog('${log.filename}')">VER</button></td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
+        // Visualiza um log específico
+        function viewLog(filename) {
+            fetch('/api/logs/' + filename)
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('log-title').innerText = `LOG: ${data.tool.toUpperCase()} @ ${data.target}`;
+                    document.getElementById('log-info').innerText = `Executado em: ${data.timestamp} | Modelo: ${data.antigravity_model}`;
+                    document.getElementById('log-analysis').innerText = data.antigravity_analysis;
+                    document.getElementById('log-raw').innerText = data.raw_output;
+                    document.getElementById('log-viewer').style.display = 'block';
+                });
+        }
+
+        function closeLog() {
+            document.getElementById('log-viewer').style.display = 'none';
+        }
+
+        // Executa novo scan
+        function runScan() {
+            const tool = document.getElementById('scan-tool').value;
+            const target = document.getElementById('scan-target').value;
+            const msg = document.getElementById('scan-msg');
+
+            if (!target) {
+                alert('Informe um alvo!');
+                return;
+            }
+
+            msg.innerText = '[*] Enviando comando para o servidor...';
+            msg.style.color = 'var(--secondary-color)';
+
+            fetch('/api/scan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({tool, target})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    msg.innerText = '[!] ERRO: ' + data.error;
+                    msg.style.color = 'var(--danger-color)';
+                } else {
+                    msg.innerText = '[+] ' + data.status;
+                    msg.style.color = 'var(--primary-color)';
+                    setTimeout(() => { loadLogs(); }, 2000);
+                }
+            });
+        }
+
+        // Init
+        updateStats();
+        loadLogs();
+        setInterval(updateStats, 3000);
+        setInterval(loadLogs, 10000);
+    </script>
+</body>
+</html>

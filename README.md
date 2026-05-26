@@ -28,6 +28,10 @@ Para Raspberry Pi Zero 2W com display Waveshare e-paper
 
 ```
 spiderpi/
+├── web/                # Interface Web (Flask/Dashboard)
+│   ├── app.py          # Backend do dashboard
+│   ├── static/         # CSS e assets web
+│   └── templates/      # Templates HTML
 ├── scanner.py          # Script principal — menu e integração Antigravity
 ├── epaper_display.py   # Driver do display Waveshare (v2.0)
 ├── setup.sh            # Instalação automatizada
@@ -38,9 +42,16 @@ spiderpi/
 
 ---
 
-## Instalação Rápida
+## 📚 Documentação Detalhada
 
-Se você ainda não tem o Kali Linux instalado no seu Pi Zero 2W, siga o nosso **[Guia de Instalação do Kali Linux (Headless)](KALI_INSTALL.md)** antes de prosseguir.
+Para facilitar a navegação, o projeto está dividido nos seguintes guias:
+
+1.  **[Guia de Instalação (KALI_INSTALL.md)](KALI_INSTALL.md)**: Como preparar o Raspberry Pi Zero 2W com Kali Linux Headless.
+2.  **[Guia de Uso (USAGE.md)](USAGE.md)**: Detalhes sobre os comandos CLI, flags de automação e o Dashboard Web.
+
+---
+
+## 🛠️ Instalação Rápida
 
 ```bash
 # 1. Clone ou copie os arquivos para o Pi
@@ -75,7 +86,7 @@ Se o display não estiver exibindo imagens ou você receber o erro `Driver não 
 
 ```bash
 # Navegue até a pasta do projeto e execute:
-python3 test_epaper.py
+sudo python3 test_epaper.py
 ```
 
 O script verificará:
@@ -111,6 +122,29 @@ spiderpi
 # Use -E para passar as variáveis de ambiente (como GEMINI_API_KEY)
 sudo -E spiderpi
 ```
+
+### Interface Web (Dashboard)
+O SpiderPi possui um painel de controle que inicia **automaticamente** em background após a instalação:
+
+![dashboard](assets/dashboard.png)
+
+- Acesse: `http://raspberrypi.local:5000` (ou o IP do seu dispositivo)
+
+### Modos de Uso
+O SpiderPi agora suporta operação híbrida (CLI + Web):
+
+1. **Modo Interativo (Menu):**
+   ```bash
+   sudo -E spiderpi
+   ```
+2. **Modo Direto (Flags/Automação):**
+   ```bash
+   sudo -E spiderpi --tool nmap --target 192.168.1.1
+   ```
+3. **Dashboard Web:**
+   Inicie e visualize scans diretamente pelo navegador.
+
+Para um guia detalhado de todos os comandos e ferramentas, veja o **[Guia de Uso (USAGE.md)](USAGE.md)**.
 
 ### Fluxo de uso:
 1. Escolha a ferramenta no menu.

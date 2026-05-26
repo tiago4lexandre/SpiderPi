@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import datetime
+import argparse
 from pathlib import Path
 
 # ── Importa novo SDK oficial (google-genai, GA desde maio 2025) ───────────────
@@ -32,12 +33,16 @@ ANTIGRAVITY_API_KEY = os.environ.get("GEMINI_API_KEY", "SUA_CHAVE_AQUI")
 # gemini-3.5-flash: Padrão Antigravity 2.0 (maio 2026)
 ANTIGRAVITY_MODEL = "gemini-3.5-flash"
 
-LOG_DIR = Path("./logs")
+# Define LOG_DIR como absoluto se estiver rodando via /opt/spiderpi
+BASE_DIR = Path(__file__).resolve().parent
+LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
 # Tenta importar suporte ao e-paper (não falha se não tiver)
 EPAPER_ENABLED = False
 try:
+    # Adiciona o diretório atual ao path para garantir que importe o local
+    sys.path.append(str(BASE_DIR))
     import epaper_display as epd_mod
     EPAPER_ENABLED = True
 except ImportError:
@@ -115,34 +120,37 @@ def run_tool(cmd: list, timeout: int = 300) -> tuple:
         return "", f"[ERRO] {e}", -1
 
 # ── Ferramentas ───────────────────────────────────────────────────────────────
-def tool_nmap(target: str) -> tuple:
+def tool_nmap(target: str, interactive: bool = True) -> tuple:
     options = [
         ("Rápido — top 100 portas abertas",        ["-F", "--open"]),
         ("Completo — todas as 65535 portas",        ["-p-", "--open"]),
         ("Serviços e versões (recomendado)",        ["-sV", "-sC", "--open"]),
         ("UDP — top 20 portas",                     ["-sU", "--top-ports", "20"]),
     ]
-    print(f"\n{C.BOLD}Tipo de scan nmap:{C.RESET}")
-    for i, (desc, _) in enumerate(options, 1):
-        print(f"  {i}. {desc}")
+    
+    if interactive:
+        print(f"\n{C.BOLD}Tipo de scan nmap:{C.RESET}")
+        for i, (desc, _) in enumerate(options, 1):
+            print(f"  {i}. {desc}")
+        choice = input("Escolha [1-4, padrão=3]: ").strip()
+        idx = (int(choice) - 1) if choice.isdigit() and 1 <= int(choice) <= 4 else 2
+    else:
+        idx = 2 # Default para não-interativo
 
-    choice = input("Escolha [1-4, padrão=3]: ").strip()
-    idx = (int(choice) - 1) if choice.isdigit() and 1 <= int(choice) <= 4 else 2
     flags = options[idx][1]
-
     print(f"{C.CYAN}[*] nmap {' '.join(flags)} {target} ...{C.RESET}")
     cmd = ["nmap"] + flags + ["-oN", "-", target]
     stdout, stderr, rc = run_tool(cmd, timeout=600)
     return "nmap", stdout or stderr
 
-def tool_nikto(target: str) -> tuple:
+def tool_nikto(target: str, interactive: bool = True) -> tuple:
     url = target if target.startswith("http") else f"http://{target}"
     print(f"{C.CYAN}[*] nikto -h {url} ...{C.RESET}")
     cmd = ["nikto", "-h", url, "-nointeractive", "-Tuning", "123457890"]
     stdout, stderr, rc = run_tool(cmd, timeout=300)
     return "nikto", stdout or stderr
 
-def tool_gobuster(target: str) -> tuple:
+def tool_gobuster(target: str, interactive: bool = True) -> tuple:
     url = target if target.startswith("http") else f"http://{target}"
 
     # Procura wordlist disponível
@@ -158,21 +166,29 @@ def tool_gobuster(target: str) -> tuple:
             "Execute: sudo apt install wordlists && gunzip /usr/share/wordlists/rockyou.txt.gz"
         )
 
-    threads = input("Threads [padrão=20, mais rápido=50]: ").strip() or "20"
+    if interactive:
+        threads = input("Threads [padrão=20, mais rápido=50]: ").strip() or "20"
+    else:
+        threads = "20"
+
     print(f"{C.CYAN}[*] gobuster dir -u {url} -w {wordlist} -t {threads} ...{C.RESET}")
     cmd = ["gobuster", "dir", "-u", url, "-w", wordlist, "-t", threads, "-q", "--no-error"]
     stdout, stderr, rc = run_tool(cmd, timeout=300)
     return "gobuster", stdout or stderr
 
-def tool_bettercap(target: str) -> tuple:
+def tool_bettercap(target: str, interactive: bool = True) -> tuple:
     if os.geteuid() != 0:
         return "bettercap", (
             "[ERRO] bettercap requer root.\n"
             "Execute: sudo spiderpi   (ou sudo python3 scanner.py)"
         )
 
-    iface = input("Interface wireless [ex: wlan1, padrão=wlan1]: ").strip() or "wlan1"
-    duration = input("Duração do recon em segundos [padrão=30]: ").strip() or "30"
+    if interactive:
+        iface = input("Interface wireless [ex: wlan1, padrão=wlan1]: ").strip() or "wlan1"
+        duration = input("Duração do recon em segundos [padrão=30]: ").strip() or "30"
+    else:
+        iface = "wlan1"
+        duration = "30"
 
     print(f"{C.CYAN}[*] bettercap wifi.recon em {iface} por {duration}s ...{C.RESET}")
     script = f"set wifi.recon.channel 0; wifi.recon on; sleep {duration}; wifi.show; exit"
@@ -212,6 +228,14 @@ TOOLS = {
     "2": ("nikto",     tool_nikto),
     "3": ("gobuster",  tool_gobuster),
     "4": ("bettercap", tool_bettercap),
+}
+
+# Mapeamento para modo não-interativo
+TOOL_MAP = {
+    "nmap":      tool_nmap,
+    "nikto":     tool_nikto,
+    "gobuster":  tool_gobuster,
+    "bettercap": tool_bettercap,
 }
 
 def print_banner():
@@ -269,9 +293,44 @@ def print_analysis(analysis: str):
             print(line)
     print(f"{C.BOLD}{'─'*52}{C.RESET}")
 
+# ── Execução Individual (para flags) ──────────────────────────────────────────
+def run_single_scan(client, tool_name, target):
+    if tool_name not in TOOL_MAP:
+        print(f"{C.RED}[ERRO] Ferramenta '{tool_name}' inválida.{C.RESET}")
+        return
+    
+    tool_fn = TOOL_MAP[tool_name]
+    
+    try:
+        _, raw_output = tool_fn(target, interactive=False)
+    except Exception as e:
+        print(f"{C.RED}[ERRO] Falha no scan: {e}{C.RESET}")
+        return
+
+    if not raw_output.strip():
+        print(f"{C.YELLOW}[!] Nenhum output gerado.{C.RESET}")
+        return
+
+    print_raw(raw_output)
+    
+    print(f"\n{C.YELLOW}[*] Enviando para Antigravity AI...{C.RESET}")
+    analysis = analyze_with_antigravity(client, tool_name, target, raw_output)
+    print_analysis(analysis)
+    
+    log_path = save_log(target, tool_name, raw_output, analysis)
+    print(f"{C.GREEN}[+] Log salvo: {log_path}{C.RESET}")
+    
+    display_on_epaper(tool_name, target, analysis)
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    print_banner()
+    parser = argparse.ArgumentParser(description="SpiderPi Recon Tool")
+    parser.add_argument("--tool", help="Ferramenta para execução direta (nmap, nikto, gobuster, bettercap)")
+    parser.add_argument("--target", help="Alvo para o scan")
+    args = parser.parse_args()
+
+    if not args.tool:
+        print_banner()
 
     # Valida API key
     if ANTIGRAVITY_API_KEY == "SUA_CHAVE_AQUI":
@@ -282,27 +341,37 @@ def main():
         sys.exit(1)
 
     # Inicializa cliente
-    print(f"{C.YELLOW}[*] Conectando ao Antigravity ({ANTIGRAVITY_MODEL})...{C.RESET}")
+    if not args.tool:
+        print(f"{C.YELLOW}[*] Conectando ao Antigravity ({ANTIGRAVITY_MODEL})...{C.RESET}")
+    
     try:
         client = init_antigravity()
-        # Teste rápido de conectividade
-        client.models.generate_content(
-            model=ANTIGRAVITY_MODEL,
-            contents="ok",
-            config=types.GenerateContentConfig(max_output_tokens=5),
-        )
-        print(f"{C.GREEN}[+] Antigravity conectado e pronto.{C.RESET}")
+        # Teste rápido de conectividade (opcional em modo flag para ser mais rápido)
+        if not args.tool:
+            client.models.generate_content(
+                model=ANTIGRAVITY_MODEL,
+                contents="ok",
+                config=types.GenerateContentConfig(max_output_tokens=5),
+            )
+            print(f"{C.GREEN}[+] Antigravity conectado e pronto.{C.RESET}")
     except Exception as e:
         print(f"{C.RED}[ERRO] Falha ao conectar ao Antigravity: {e}{C.RESET}")
-        print(f"       Verifique sua API key e conexão com a internet.")
         sys.exit(1)
 
+    # Modo Não-Interativo (Flags)
+    if args.tool:
+        if not args.target:
+            print(f"{C.RED}[ERRO] Alvo (--target) obrigatório quando --tool é usado.{C.RESET}")
+            sys.exit(1)
+        run_single_scan(client, args.tool, args.target)
+        return
+
+    # Modo Interativo (Menu)
     if EPAPER_ENABLED:
         print(f"{C.GREEN}[+] Display e-paper detectado.{C.RESET}")
     else:
         print(f"{C.DIM}[~] Display e-paper não detectado (modo terminal).{C.RESET}")
 
-    # Loop principal
     while True:
         print()
         print_menu()
@@ -314,55 +383,38 @@ def main():
             break
 
         if choice not in TOOLS:
-            print(f"{C.RED}[!] Opção inválida. Escolha entre 1-4 ou 0 para sair.{C.RESET}")
+            print(f"{C.RED}[!] Opção inválida.{C.RESET}")
             continue
 
         target = input("Alvo (IP, hostname ou URL): ").strip()
         if not target:
-            print(f"{C.RED}[!] Alvo não pode ser vazio.{C.RESET}")
             continue
 
         tool_name, tool_fn = TOOLS[choice]
 
-        # ── Executa ferramenta ────────────────────────────────────────────────
         try:
-            _, raw_output = tool_fn(target)
-        except KeyboardInterrupt:
-            print(f"\n{C.YELLOW}[!] Scan interrompido pelo usuário.{C.RESET}")
-            continue
-
-        if not raw_output.strip():
-            print(f"{C.YELLOW}[!] Nenhum output gerado pela ferramenta.{C.RESET}")
-            continue
-
-        # ── Mostra output bruto ───────────────────────────────────────────────
-        print_raw(raw_output)
-
-        # ── Análise com Antigravity ───────────────────────────────────────────
-        print(f"\n{C.YELLOW}[*] Enviando para Antigravity AI...{C.RESET}")
-        try:
+            _, raw_output = tool_fn(target, interactive=True)
+            if not raw_output.strip():
+                print(f"{C.YELLOW}[!] Sem output.{C.RESET}")
+                continue
+            
+            print_raw(raw_output)
+            print(f"\n{C.YELLOW}[*] Enviando para Antigravity AI...{C.RESET}")
             analysis = analyze_with_antigravity(client, tool_name, target, raw_output)
-        except KeyboardInterrupt:
-            print(f"\n{C.YELLOW}[!] Análise cancelada.{C.RESET}")
-            analysis = "[Análise cancelada pelo usuário]"
-
-        print_analysis(analysis)
-
-        # ── Salva log ─────────────────────────────────────────────────────────
-        log_path = save_log(target, tool_name, raw_output, analysis)
-        print(f"{C.GREEN}[+] Log salvo: {log_path}{C.RESET}")
-
-        # ── Atualiza e-paper ──────────────────────────────────────────────────
-        display_on_epaper(tool_name, target, analysis)
-
-        try:
+            print_analysis(analysis)
+            
+            log_path = save_log(target, tool_name, raw_output, analysis)
+            print(f"{C.GREEN}[+] Log salvo: {log_path}{C.RESET}")
+            display_on_epaper(tool_name, target, analysis)
+            
             input(f"\n{C.DIM}[Enter para voltar ao menu...]{C.RESET}")
         except KeyboardInterrupt:
-            print()
+            print(f"\n{C.YELLOW}[!] Operação interrompida.{C.RESET}")
+            continue
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n\n{C.CYAN}[*] Interrompido. Até mais.{C.RESET}\n")
+        print(f"\n\n{C.CYAN}[*] Interrompido.{C.RESET}\n")
         sys.exit(0)
