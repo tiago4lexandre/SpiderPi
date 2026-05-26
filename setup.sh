@@ -148,7 +148,7 @@ log "Instalando dependências Python no venv..."
 # No Python 3.13+, RPi.GPIO falha no edge detection.
 # Usamos rpi-lgpio como shim de compatibilidade sobre a liblgpio compilada.
 $PIP uninstall RPi.GPIO -y -q 2>/dev/null || true
-$PIP install google-genai Pillow spidev gpiozero lgpio rpi-lgpio flask psutil -q
+$PIP install google-genai Pillow spidev gpiozero lgpio rpi-lgpio flask flask-socketio eventlet psutil -q
 
 # ════════════════════════════════════════════════════════
 # 4. DRIVER WAVESHARE E-PAPER

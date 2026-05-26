@@ -140,6 +140,46 @@ tr:hover {
 .badge-medio { background-color: var(--success-color); color: black; }
 .badge-baixo { background-color: #34495e; color: white; }
 
+/* Terminal Area */
+.terminal-container {
+    background-color: #000;
+    border: 1px solid var(--primary-color);
+    border-radius: 4px;
+    margin-bottom: 2rem;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 0 5px rgba(0, 255, 65, 0.2);
+}
+
+.terminal-header {
+    background-color: #111;
+    color: var(--primary-color);
+    padding: 0.5rem 1rem;
+    font-size: 0.7rem;
+    border-bottom: 1px solid #222;
+    display: flex;
+    justify-content: space-between;
+}
+
+#terminal-console {
+    height: 300px;
+    overflow-y: auto;
+    padding: 1rem;
+    font-size: 0.85rem;
+    color: #00ff41;
+    white-space: pre-wrap;
+    line-height: 1.4;
+    scroll-behavior: smooth;
+}
+
+#terminal-console::-webkit-scrollbar {
+    width: 6px;
+}
+
+#terminal-console::-webkit-scrollbar-thumb {
+    background: #222;
+}
+
 /* Log Viewer Modal/Overlay */
 #log-viewer {
     position: fixed;

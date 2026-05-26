@@ -3,10 +3,14 @@ import json
 import subprocess
 import platform
 import psutil
+import threading
 from flask import Flask, render_template, jsonify, request, abort
+from flask_socketio import SocketIO, emit
 from pathlib import Path
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'spiderpi_secret'
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Configurações
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,7 +23,6 @@ def get_system_stats():
         "cpu_usage": psutil.cpu_percent(interval=None),
         "ram_usage": psutil.virtual_memory().percent,
         "disk_usage": psutil.disk_usage('/').percent,
-        "uptime": "",
         "temp": "N/A"
     }
     
@@ -76,6 +79,14 @@ def get_log(filename):
     with open(file_path, 'r', encoding='utf-8') as f:
         return jsonify(json.load(f))
 
+def stream_output(process):
+    """Lê a saída do processo e envia para o frontend via SocketIO."""
+    for line in iter(process.stdout.readline, ''):
+        socketio.emit('terminal_output', {'line': line})
+        socketio.sleep(0) # Permite que o SocketIO processe a fila de emissão
+    process.wait()
+    socketio.emit('terminal_output', {'line': '\n--- SCAN FINALIZADO ---'})
+
 @app.route('/api/scan', methods=['POST'])
 def run_scan():
     data = request.json
@@ -85,20 +96,28 @@ def run_scan():
     if not tool or not target:
         return jsonify({"error": "Parâmetros inválidos"}), 400
         
-    # Executa o scanner.py em segundo plano para não travar a UI
-    # Nota: Em produção, usaríamos uma fila de tarefas (Celery/Redis), 
-    # mas para o Pi Zero, um subprocess simples é mais leve.
     try:
         # Comando para rodar o scanner no modo não-interativo usando as flags --tool e --target
-        cmd = [os.sys.executable, str(BASE_DIR / "scanner.py"), "--tool", tool, "--target", target]
+        # Usamos -u para output unbuffered e stdbuf para ferramentas externas
+        cmd = ["stdbuf", "-oL", os.sys.executable, "-u", str(BASE_DIR / "scanner.py"), "--tool", tool, "--target", target]
         
-        # Executamos em background para não travar a requisição HTTP do dashboard
-        # Os logs serão gerados automaticamente na pasta logs/
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=os.environ.copy()
+        )
+        
+        # Inicia thread para ler e enviar a saída
+        thread = threading.Thread(target=stream_output, args=(process,))
+        thread.daemon = True
+        thread.start()
         
         return jsonify({"status": "Scan iniciado", "tool": tool, "target": target})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=False)

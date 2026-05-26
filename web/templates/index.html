@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SpiderPi Recon Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
 <body>
     <header>
@@ -44,9 +45,18 @@
                     <option value="bettercap">BETTERCAP (WiFi Recon)</option>
                 </select>
                 <input type="text" id="scan-target" placeholder="IP, Host ou URL" required>
-                <button onclick="runScan()">EXECUTAR SCAN</button>
+                <button id="btn-scan" onclick="runScan()">EXECUTAR SCAN</button>
             </div>
             <div id="scan-msg" style="margin-top: 10px; font-size: 0.8rem;"></div>
+        </section>
+
+        <!-- Terminal em Tempo Real -->
+        <section class="terminal-container">
+            <div class="terminal-header">
+                <span>LIVE_TERMINAL_FEED</span>
+                <span id="terminal-status" style="color: var(--warning-color);">STANDBY</span>
+            </div>
+            <div id="terminal-console">Aguardando comando...</div>
         </section>
 
         <!-- Histórico de Logs -->
@@ -85,6 +95,26 @@
     </div>
 
     <script>
+        const socket = io();
+        const consoleElem = document.getElementById('terminal-console');
+        const terminalStatus = document.getElementById('terminal-status');
+
+        // Recebe saída do terminal via SocketIO
+        socket.on('terminal_output', function(msg) {
+            if (consoleElem.innerText === 'Aguardando comando...') {
+                consoleElem.innerText = '';
+            }
+            consoleElem.innerText += msg.line;
+            consoleElem.scrollTop = consoleElem.scrollHeight;
+            
+            if (msg.line.includes('--- SCAN FINALIZADO ---')) {
+                terminalStatus.innerText = 'FINALIZADO';
+                terminalStatus.style.color = 'var(--primary-color)';
+                document.getElementById('btn-scan').disabled = false;
+                loadLogs();
+            }
+        });
+
         // Atualiza estatísticas a cada 3 segundos
         function updateStats() {
             fetch('/api/stats')
@@ -147,7 +177,13 @@
                 return;
             }
 
-            msg.innerText = '[*] Enviando comando para o servidor...';
+            // Limpa terminal
+            consoleElem.innerText = `[*] Iniciando scan de ${tool} em ${target}...\n`;
+            terminalStatus.innerText = 'EXECUTANDO';
+            terminalStatus.style.color = 'var(--secondary-color)';
+            document.getElementById('btn-scan').disabled = true;
+
+            msg.innerText = '[*] Comando enviado. Acompanhe o terminal abaixo.';
             msg.style.color = 'var(--secondary-color)';
 
             fetch('/api/scan', {
@@ -160,10 +196,9 @@
                 if (data.error) {
                     msg.innerText = '[!] ERRO: ' + data.error;
                     msg.style.color = 'var(--danger-color)';
-                } else {
-                    msg.innerText = '[+] ' + data.status;
-                    msg.style.color = 'var(--primary-color)';
-                    setTimeout(() => { loadLogs(); }, 2000);
+                    terminalStatus.innerText = 'ERRO';
+                    terminalStatus.style.color = 'var(--danger-color)';
+                    document.getElementById('btn-scan').disabled = false;
                 }
             });
         }
@@ -172,7 +207,7 @@
         updateStats();
         loadLogs();
         setInterval(updateStats, 3000);
-        setInterval(loadLogs, 10000);
+        setInterval(loadLogs, 15000);
     </script>
 </body>
 </html>

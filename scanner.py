@@ -94,7 +94,7 @@ Seja direto e técnico. Sem introduções, sem repetir o output."""
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,       # Ainda mais determinístico para Antigravity 2.0
-                max_output_tokens=1024,
+                max_output_tokens=2048, # Aumentado para evitar cortes
             ),
         )
         return response.text
